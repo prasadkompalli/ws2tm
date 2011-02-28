@@ -3,25 +3,33 @@
  */
 package de.unileipzig.ws2tm;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
 import javax.wsdl.*;
-import javax.wsdl.extensions.ExtensibilityElement;
-import javax.wsdl.extensions.soap.SOAPAddress;
-import javax.wsdl.extensions.soap.SOAPBinding;
-import javax.wsdl.extensions.soap.SOAPBody;
-import javax.wsdl.extensions.soap.SOAPOperation;
+import javax.wsdl.extensions.*;
+import javax.wsdl.extensions.schema.Schema;
+import javax.wsdl.extensions.soap.*;
+import javax.wsdl.extensions.soap12.SOAP12Address;
 import javax.wsdl.factory.WSDLFactory;
+
 import javax.xml.namespace.QName;
+import javax.xml.soap.MessageFactory;
+import javax.xml.soap.SOAPBodyElement;
+import javax.xml.soap.SOAPException;
 import javax.xml.soap.SOAPMessage;
 
 import org.apache.log4j.Logger;
@@ -29,23 +37,23 @@ import org.tmapi.core.Association;
 import org.tmapi.core.FactoryConfigurationException;
 import org.tmapi.core.Locator;
 import org.tmapi.core.MalformedIRIException;
-import org.tmapi.core.Name;
 import org.tmapi.core.Occurrence;
 import org.tmapi.core.Role;
 import org.tmapi.core.Topic;
 import org.tmapi.core.TopicMap;
 import org.tmapi.core.TopicMapExistsException;
 
-import com.semagia.mio.helpers.HamsterHandler.IRole;
+import com.sun.xml.xsom.XSType;
 
-import de.topicmapslab.majortom.model.core.IAssociation;
-import de.topicmapslab.majortom.model.core.IConstruct;
-import de.topicmapslab.majortom.model.core.IName;
-import de.topicmapslab.majortom.model.core.ITopic;
-import de.topicmapslab.majortom.model.core.ITopicMap;
-import de.topicmapslab.majortom.model.core.ITopicMapSystem;
+import de.unileipzig.ws2tm.exception.InitializationException;
 import de.unileipzig.ws2tm.factory.TopicMapEngine;
+import de.unileipzig.ws2tm.util.WebServiceConfigurator;
+import de.unileipzig.ws2tm.util.WebServiceConnector;
+import de.unileipzig.ws2tm.ws.soap.Authentication;
+import de.unileipzig.ws2tm.ws.soap.Parameter;
 import de.unileipzig.ws2tm.ws.soap.RequestObject;
+import de.unileipzig.ws2tm.ws.soap.impl.AuthenticationImpl;
+import de.unileipzig.ws2tm.ws.xsd.SchemaParser;
 
 /**
  * <b>Factory WebService2TopicMap</b> is the main access point to access the
@@ -67,11 +75,11 @@ public class WebService2TopicMapFactory implements Factory {
 
 	private static Logger log = Logger.getLogger(WebService2TopicMapFactory.class);
 	
-	public final static String NS_WebService = "http://ws2tm.org/";
+	public final static String NS_WebService = WebServiceConfigurator.getNameSpaceWS2TM();
 
-	public final static String NS_SOAP2TM = WebService2TopicMapFactory.NS_WebService + "/SOAP2TM/";
+	public final static String NS_SOAP2TM = NS_WebService + "/SOAP2TM/";
 
-	public final static String NS_WSDL2TM = WebService2TopicMapFactory.NS_WebService + "/WSDL2TM/";
+	public final static String NS_WSDL2TM = NS_WebService + "/WSDL2TM/";
 
 	public final static String NS_WSDL = "http://schemas.xmlsoap.org/wsdl/";
 
@@ -118,21 +126,38 @@ public class WebService2TopicMapFactory implements Factory {
 
 	private class WebService2TopicMapImpl implements WebService2TopicMap {
 
+		protected WSDL2TMImpl wsdl2tm;
+		
+		protected SOAP2TMImpl soap2tm;
+		
+		private Authentication auth;
+		
+		private boolean merged = false;
+		
+		private boolean changeOccurred = false;
+		
+		private TopicMap mergedTopicMap;
+		
 		@Override
 		public TopicMap mergeTopicMaps() {
-			// TODO Auto-generated method stub
-			return null;
+			if (merged == true && changeOccurred == false) {
+				return mergedTopicMap;
+			}
+			if (changeOccurred == true || this.mergedTopicMap == null) {
+				this.mergedTopicMap = wsdl2tm.load();
+				this.mergedTopicMap.mergeIn(soap2tm.load());
+			}
+			return this.mergedTopicMap;
 		}
 
 		@Override
-		public TopicMap newWebService(String wsdlPath) throws IOException,
-				InitializationException {
+		public TopicMap newWebService(String wsdlPath) throws IOException, InitializationException {
+			//TODO what happens if the wsdl2tm will be overwritten by calling this function twice with different wsdl paths (web service definitions)
 			TopicMap tm = null;
-			TopicMapAccessObject wsdl2tm = null;
 			try {
-				tm = TopicMapEngine.newInstance().createNewTopicMapInstance(new File("tmp/wsdl2tm.xtm"), NS_WSDL2TM);
+				tm = TopicMapEngine.newInstance().createNewTopicMapInstance(new File(WebServiceConfigurator.getFileWSDL2TM()), NS_WSDL2TM);
 				Definition wsdl = WSDLFactory.newInstance().newWSDLReader().readWSDL(wsdlPath);
-				wsdl2tm = new WSDL2TMImpl(wsdl, tm);
+				this.wsdl2tm = new WSDL2TMImpl(wsdl, tm);
 				TopicMapEngine.newInstance().write(tm);
 			} catch (MalformedIRIException e1) {
 				// TODO Auto-generated catch block
@@ -147,18 +172,90 @@ public class WebService2TopicMapFactory implements Factory {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			} catch (WSDLException e) {
-				throw new IOException("WSDL could not be retrieved from path "
-						+ wsdlPath, e);
+				throw new IOException("WSDL could not be retrieved from path "+ wsdlPath, e);
 			}
 
 			return wsdl2tm.load();
 		}
 
 		@Override
-		public TopicMap newWebServiceRequest(RequestObject request)
-				throws IOException {
-			// TODO Auto-generated method stub
-			return null;
+		public TopicMap newWebServiceRequest(RequestObject request) throws IOException, InitializationException {
+			if (wsdl2tm == null) {
+				throw new InitializationException("The web service needs to be initialized first before requests can be done. Please call function #newWebService(String) first or consult the documentation.");
+			}
+			if (soap2tm == null) {
+				try {
+					soap2tm = new SOAP2TMImpl(this.getConnectionParameter());
+				} catch (MalformedIRIException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (FactoryConfigurationException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (IllegalArgumentException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (TopicMapExistsException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			this.getConnectionParameter();
+			this.soap2tm.request(this.soap2tm.init(),request);
+			
+			return this.soap2tm.load();
+		}
+
+		@Override
+		public boolean authenticationRequired() {
+			if (this.auth.securityRequired())
+				return true;
+			return false;
+		}
+
+		@Override
+		public Authentication getAuthentication() {
+			return this.auth;
+		}
+
+		@Override
+		public void setAuthenticationParameter(String user, String pw) {
+			this.auth = new AuthenticationImpl(user,pw);
+		}
+		
+		/**
+		 * This function returns a valid URL pointing to the end point of a web service.
+		 * The valid url should contain an existing web service host and an existing resource, which
+		 * can be connected. This url will be required to establish a working connection between
+		 * client and web server.
+		 * 
+		 * @return URL containing the host and path to the web service end point
+		 * @throws MalformedURLException if the URL can not be created because an error exists in the url candidate (invalid sign, invalid protocol)
+		 */
+		private URL getConnectionParameter() throws MalformedURLException {
+			Topic service = wsdl2tm.load().getTopicBySubjectIdentifier(wsdl2tm.load().createLocator(WebService2TopicMapFactory.NS_WSDL+"Service"));
+			String address = null;
+			// Retrieve all existing topics of the web service description topic map
+			for (Topic t : wsdl2tm.load().getTopics()) {
+				// Check if the topic has the type NS_WSDL+"Service"
+				if (t.getTypes().contains(service)) {
+					// Retrieve all existing occurrences for topic
+					for (Occurrence o : t.getOccurrences()) {
+						// Check if the type of the occurrence points to NS_WSDL2TM+"LocationURI"
+						if (o.getType().getSubjectIdentifiers().contains(wsdl2tm.load().createLocator(NS_WSDL2TM+ "LocationURI"))) {
+							address = o.getValue();
+							if (log.isDebugEnabled()) {
+								log.debug("Found connection url: "+address);
+							}
+						}
+					}
+				}
+			}
+			if (address == null) {
+				throw new MalformedURLException("Unable to create a valid url because the provided web service description does not contain any connection address.");
+			}
+			
+			return new URL(address);
 		}
 
 	}
@@ -167,37 +264,70 @@ public class WebService2TopicMapFactory implements Factory {
 
 		private TopicMap tm;
 
-		private SOAP2TMImpl(RequestObject request) {
-			this.request(request);
+		private URL url;
+		private SOAP2TMImpl(URL url) throws MalformedIRIException, FactoryConfigurationException, IllegalArgumentException, TopicMapExistsException, IOException {
+			this.tm = TopicMapEngine.newInstance().createNewTopicMapInstance(new File(WebServiceConfigurator.getFileSOAP2TM()), WebService2TopicMapFactory.NS_SOAP2TM);
+			this.url = url;
 		}
 
-		private void request(RequestObject request) {
+		private void request(SOAPMessage msg, RequestObject request) {
+			
+			for (de.unileipzig.ws2tm.ws.soap.Operation op : request.getOperations()) {
+				SOAPBodyElement body;
+				try {
+					body = msg.getSOAPBody().addBodyElement(op.getQName());
+					for (Parameter para : op.getParameters()) {
+						body.addChildElement(para.getQName()).addTextNode(para.getValue());
+					}
+				} catch (SOAPException e) {
+					log.error("Operation "+op.getName()+" created an error while adding their parameter to a soap message instance.",e);
+				}
+			}
+			
+			// the next lines are using class WebServiceConnector to establish to send and receive the response
+			
+//			WebServiceConnector.setProxySettings("141.80.150.1", "80");
+//			WebServiceConnector.setProxyAuthentification("mdcguest", "h47dkAKF");
+			
+			WebServiceConnector wsc = WebServiceConnector.newConnection(url);
+			BufferedReader reader = new BufferedReader(new InputStreamReader(wsc.sendRequest(msg)));
+			String line;
+			try {
+				while ((line = reader.readLine()) != null) {
+					System.out.println(line);
+				}
+			} catch (IOException e) {
+				log.fatal("Received response could not be read. BufferedReader could not read any line probably.",e);
+			}
+		}
+
+		private SOAPMessage init() {
 			SOAPMessage msg = null;
-
-			this.init(msg);
-		}
-
-		private void init(SOAPMessage msg) {
-			// TODO Auto-generated method stub
-
+			try {
+				msg = MessageFactory.newInstance().createMessage();
+			} catch (SOAPException e) {
+				log.fatal("It is not possible to create soap message instances through class "+MessageFactory.class.getCanonicalName()+".",e);
+			}
+			return msg;
 		}
 
 		@Override
 		public Set<Association> getAssociations() {
-			// TODO Auto-generated method stub
-			return null;
+			return this.tm.getAssociations();
 		}
 
 		@Override
 		public Set<Occurrence> getOccurrences() {
-			// TODO Auto-generated method stub
-			return null;
+			Set<Occurrence> occs = new HashSet<Occurrence>();
+			for (Topic t: this.getTopics()){
+				occs.addAll(t.getOccurrences());
+			}
+			return occs;
 		}
 
 		@Override
 		public Set<Topic> getTopics() {
-			// TODO Auto-generated method stub
-			return null;
+			return this.tm.getTopics();
 		}
 
 		@Override
@@ -234,13 +364,16 @@ public class WebService2TopicMapFactory implements Factory {
 	// TODO Documentation required for every defined association
 	private enum WSDLAssociation {
 		relation_service_port,
+		relation_service_operation,
 		relation_port_binding,
 		relation_binding_operation,
+		relation_bindingoperation_message,
 		relation_bindingoperation_input,
 		relation_bindingoperation_output,
 		relation_bindingoperation_fault,
 		relation_binding_porttype,
 		relation_porttype_operation,
+		relation_operation_message,
 		relation_operation_input,
 		relation_operation_output,
 		relation_operation_fault,
@@ -248,7 +381,7 @@ public class WebService2TopicMapFactory implements Factory {
 		relation_output_message,
 		relation_fault_message,
 		relation_message_part,
-		relation_part_types 
+		relation_part_types
 	}
 	
 	private enum WSDLTopic {
@@ -341,17 +474,19 @@ public class WebService2TopicMapFactory implements Factory {
 	}
 	
 	private class WSDL2TMImpl implements TopicMapAccessObject {
-
-		
-		private int count = 0;
 		
 		private TopicMap tm;
 		private String tns;
 		private Topic deutsch;
 		private Topic english;
+		
+		private HashMap<String, URL> namespaces;
+		
 		private HashMap<WSDLAssociation, Topic> ascs;
 		private HashMap<WSDLTopic, Topic> topicTypes;
 		private HashMap<WSDLRoles, Topic> topicRoles;
+		private String unset = "Not defined";
+		private Topic dataType;
 		
 		private WSDL2TMImpl(Definition wsdl) throws InitializationException,MalformedIRIException, FactoryConfigurationException,IllegalArgumentException, TopicMapExistsException, IOException {
 			this(wsdl, WebService2TopicMapFactory.NS_WSDL2TM+ new Random().nextLong());
@@ -374,13 +509,16 @@ public class WebService2TopicMapFactory implements Factory {
 			}
 			log.info("Using web service description "+wsdl.getDocumentBaseURI());
 			
-			Topic language = tm.createTopicByItemIdentifier(tm.createLocator("http://code.topicmapslab.de/grigull-tm2speech/Language/"));
-			deutsch = tm.createTopicByItemIdentifier(tm.createLocator("http://code.topicmapslab.de/grigull-tm2speech/Language/deutsch"));
+			Topic language = this.createTopic("http://code.topicmapslab.de/grigull-tm2speech/Language/", IDs.ItemIdentifier).getTopic();
+			deutsch = this.createTopic("http://code.topicmapslab.de/grigull-tm2speech/Language/deutsch", IDs.ItemIdentifier).getTopic();
 			deutsch.createName("deutsch");
 			deutsch.addType(language);
-			english = tm.createTopicByItemIdentifier(tm.createLocator("http://code.topicmapslab.de/grigull-tm2speech/Language/english"));
+			
+			english = this.createTopic("http://code.topicmapslab.de/grigull-tm2speech/Language/english", IDs.ItemIdentifier).getTopic();
 			english.createName("english");
 			english.addType(language);
+			
+			dataType = this.createTopic(NS_WebService+"DataType", IDs.ItemIdentifier).getTopic();
 			
 			this.ascs = this.createAssociations();
 			if (this.ascs.size() > 0) {
@@ -395,9 +533,70 @@ public class WebService2TopicMapFactory implements Factory {
 				log.info(WSDL2TMImpl.class.getSimpleName()+": Created successfully Roles for Topics");
 			}
 			
+			this.namespaces = new HashMap<String, URL>();
+			Map<String,String> map = (Map<String,String>) wsdl.getNamespaces();
+			for (Map.Entry<String, String> e : map.entrySet()) {
+				this.addNameSpace(e.getKey(), e.getValue());
+			}
+			this.addNameSpace("TNS", this.tns);
+			
+			Iterator<ExtensibilityElement> it = wsdl.getTypes().getExtensibilityElements().iterator();
+			while (it.hasNext()) {
+				ExtensibilityElement e = it.next();
+				QName name = e.getElementType();
+				if (name.getNamespaceURI().equalsIgnoreCase("http://www.w3.org/2001/XMLSchema") && name.getLocalPart().equalsIgnoreCase("schema")) {
+					Schema s = (Schema) e;
+					
+					try {
+						SchemaParser.getFactory().addSchema(name.getNamespaceURI());
+					} catch (IllegalArgumentException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					} catch (IOException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}
+					
+					
+//					SchemaParser.addSchema(s);
+				}
+				
+				System.out.println("Elements: "+it.next().getElementType().getNamespaceURI());
+			}
+			
+			System.exit(2);
+			
 			this.init(wsdl);
 		}
-
+		
+		/**
+		 * This method simplifies the adding process for name spaces.
+		 * 
+		 * @param prefix - prefix for name space
+		 * @param url - URL pointing to the name space
+		 * 
+		 * @see #addNameSpace(String, URL)
+		 */
+		private void addNameSpace(String prefix, String url) {
+			try {
+				this.addNameSpace(prefix, new URL(url));
+			} catch (MalformedURLException e) {
+				log.error("Could not add namespace to list of name spaces because of an mal formed URL",e);
+			}
+		}
+		
+		/**
+		 * This method simplifies the adding process for name spaces.
+		 * 
+		 * @param prefix - prefix for name space
+		 * @param url - URL pointing to the name space
+		 * 
+		 * @see #addNameSpace(String, String)
+		 */
+		private void addNameSpace(String prefix, URL url) {
+			this.namespaces.put(prefix.toUpperCase(), url);
+			log.debug("Added new name space: "+prefix+":"+url.toString());
+		}
 		
 		/**
 		 * This method creates all required associations. The following list
@@ -423,29 +622,94 @@ public class WebService2TopicMapFactory implements Factory {
 		 */
 		private HashMap<WSDLAssociation, Topic> createAssociations() {
 			HashMap<WSDLAssociation, Topic> ascs = new HashMap<WSDLAssociation, Topic>();
-			ascs.put(WSDLAssociation.relation_service_port, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_service_port.name()),"Relation Service Port"));
-			ascs.put(WSDLAssociation.relation_port_binding, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_port_binding),"Relation Port Binding"));
-			ascs.put(WSDLAssociation.relation_binding_porttype, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_binding_porttype),"Relation Binding PortType"));
-			ascs.put(WSDLAssociation.relation_binding_operation, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_binding_operation.name()),"Relation Binding BindingOperation"));
-			ascs.put(WSDLAssociation.relation_bindingoperation_input, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_bindingoperation_input), "Relation BindingOperation Input"));
-			ascs.put(WSDLAssociation.relation_bindingoperation_output, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_bindingoperation_output), "Relation BindingOperation Output"));
-			ascs.put(WSDLAssociation.relation_bindingoperation_fault, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_bindingoperation_fault), "Relation BindingOperation Fault"));
-			ascs.put(WSDLAssociation.relation_porttype_operation, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_porttype_operation),"Relation PortType Operation"));
-			ascs.put(WSDLAssociation.relation_operation_input, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_operation_input.name()),"Relation PortType Operation Input"));
-			ascs.put(WSDLAssociation.relation_operation_output, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_operation_output.name()),"Relation PortType Operation Output"));
-			ascs.put(WSDLAssociation.relation_operation_fault, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_operation_fault.name()),"Relation PortType Operation Fault"));
-			ascs.put(WSDLAssociation.relation_input_message, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_input_message.name()),"Relation Input Message"));
-			ascs.put(WSDLAssociation.relation_output_message, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_output_message.name()),"Relation Output Message"));
-			ascs.put(WSDLAssociation.relation_message_part, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_message_part.name()),"Relation Message Part"));
-			ascs.put(WSDLAssociation.relation_part_types, this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_part_types.name()),"Relation Part Types"));
+			ascs.put(WSDLAssociation.relation_service_port, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_service_port.name()),
+							new NameE("Relation Service Port"),
+							new NameE("Serviceschnittstellen", deutsch)
+					));
+			ascs.put(WSDLAssociation.relation_port_binding, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_port_binding),
+							new NameE("Relation Port Binding"),
+							new NameE("Schnittstellenbindungen", deutsch)
+					));
+			ascs.put(WSDLAssociation.relation_binding_porttype, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_binding_porttype),
+							new NameE("Relation Binding PortType"),
+							new NameE("PortType-Bindungen", deutsch)
+					));
+			ascs.put(WSDLAssociation.relation_service_operation,
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_service_operation), 
+							new NameE("Service Operations"),
+							new NameE("Service-Funktionen", deutsch)
+					));
+			ascs.put(WSDLAssociation.relation_binding_operation, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_binding_operation.name()),
+							new NameE("Relation Binding BindingOperation"),
+							new NameE("Service Operationen",deutsch)
+					));
+			ascs.put(WSDLAssociation.relation_bindingoperation_input, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_bindingoperation_input), 
+							new NameE("Relation BindingOperation Input")
+					));
+			ascs.put(WSDLAssociation.relation_bindingoperation_output, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_bindingoperation_output), 
+							new NameE("Relation BindingOperation Output")
+					));
+			ascs.put(WSDLAssociation.relation_bindingoperation_fault, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_bindingoperation_fault), 
+							new NameE("Relation BindingOperation Fault")
+					));
+			ascs.put(WSDLAssociation.relation_bindingoperation_message, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_bindingoperation_message.name()), 
+							new NameE("Relation BindingOperation Message")
+					));
+			ascs.put(WSDLAssociation.relation_porttype_operation, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_porttype_operation),
+							new NameE("Relation PortType Operation")
+					));
+			ascs.put(WSDLAssociation.relation_operation_input, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_operation_input.name()),
+							new NameE("Relation PortType Operation Input")
+					));
+			ascs.put(WSDLAssociation.relation_operation_output, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_operation_output.name()),
+							new NameE("Relation PortType Operation Output")
+					));
+			ascs.put(WSDLAssociation.relation_operation_fault, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_operation_fault.name()),
+							new NameE("Relation PortType Operation Fault")
+					));
+			ascs.put(WSDLAssociation.relation_operation_message, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_operation_message.name()), 
+							new NameE("Relation Operation Message")
+					));
+			ascs.put(WSDLAssociation.relation_input_message, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_input_message.name()),
+							new NameE("Relation Input Message")
+					));
+			ascs.put(WSDLAssociation.relation_output_message, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_output_message.name()),
+							new NameE("Relation Output Message")
+					));
+			ascs.put(WSDLAssociation.relation_message_part, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_message_part.name()),
+							new NameE("Relation Message Part", english)
+					));
+			ascs.put(WSDLAssociation.relation_part_types, 
+					this.createAssociation(tm.createLocator(NS_WSDL2TM+WSDLAssociation.relation_part_types.name()),
+							new NameE("Relation Part Types", english),
+							new NameE("Abstrakte Typendefinition", deutsch)
+					));
 			return ascs;
 		}
 
-		private Topic createAssociation(Locator locator, String name) {
+		private Topic createAssociation(Locator locator, NameE... names) {
 			Topic ascType = this.createTopic(locator, IDs.SubjectIdentifier).getTopic();
 			ascType.addType(this.createTopic(NS_WSDL2TM+ "sub_category_association_type", IDs.ItemIdentifier).getTopic());
 			ascType.getTypes().iterator().next().addType(tm.createTopicByItemIdentifier(tm.createLocator("http://psi.topicmaps.org/tmcl/topic-type")));
-			ascType.createName(name);
+			for (NameE name : names) {
+				ascType.createName(name.getName(), name.getScopes());
+			}
 			return ascType;
 		}
 
@@ -508,64 +772,64 @@ public class WebService2TopicMapFactory implements Factory {
 			Topic roleType = tm.createTopicByItemIdentifier(tm.createLocator("http://psi.topicmaps.org/tmcl/role-type"));
 			
 			roles.put(WSDLRoles.service, this.createRole(NS_WSDL2TM+"Service-Role", roleType, 
-					new NameE("Role Service",english),
-					new NameE("Element Service", deutsch))
+					new NameE("Service",english),
+					new NameE("Service", deutsch))
 			);
 			roles.put(WSDLRoles.port, this.createRole(NS_WSDL2TM+"ServicePort-Role", roleType, 
-					new NameE("Role Service Port",english),
-					new NameE("Element Service Port", deutsch))
+					new NameE("Service-Port",english),
+					new NameE("Service-Port", deutsch))
 			);
 			roles.put(WSDLRoles.binding, this.createRole(NS_WSDL2TM+"Binding-Role", roleType, 
-					new NameE("Role Binding",english),
-					new NameE("Element Binding", deutsch))
+					new NameE("Binding",english),
+					new NameE("Binding", deutsch))
 			);
 			roles.put(WSDLRoles.bindingop, this.createRole(NS_WSDL2TM+"BindingOperation-Role", roleType, 
-					new NameE("Role Binding Operation",english),
-					new NameE("Element Binding Operation", deutsch))
+					new NameE("Binding Operation",english),
+					new NameE("Binding Funktion", deutsch))
 			);
 			roles.put(WSDLRoles.bindingop_input, this.createRole(NS_WSDL2TM+"BindingInput-Role", roleType, 
-					new NameE("Role Binding Operation Input", english),
-					new NameE("Element Binding Operation Input", deutsch))
+					new NameE("Input", english),
+					new NameE("Eingabe", deutsch))
 			);
 			roles.put(WSDLRoles.bindingop_output, this.createRole(NS_WSDL2TM+"BindingOutput-Role", roleType, 
-					new NameE("Role Binding Operation Output", english),
-					new NameE("Element Binding Operation Output", deutsch))
+					new NameE("Output", english),
+					new NameE("Ausgabe", deutsch))
 			);
 			roles.put(WSDLRoles.bindingop_fault, this.createRole(NS_WSDL2TM+"BindingFault-Role", roleType, 
-					new NameE("Role Binding Operation Fault", english),
-					new NameE("Element Binding Operation Fault", deutsch))
+					new NameE("Binding Operation Fault", english),
+					new NameE("Binding Funktionsfehler", deutsch))
 			);
 			roles.put(WSDLRoles.porttype, this.createRole(NS_WSDL2TM+"PortType-Role", roleType, 
-					new NameE("Role PortType",english),
-					new NameE("Element PortType", deutsch))
+					new NameE("PortType",english),
+					new NameE("PortType", deutsch))
 			);
 			roles.put(WSDLRoles.operation, this.createRole(NS_WSDL2TM+"Operation-Role", roleType, 
-					new NameE("Role Operation",english),
-					new NameE("Element Operation", deutsch))
+					new NameE("Operation",english),
+					new NameE("Funktion", deutsch))
 			);
 			roles.put(WSDLRoles.operation_input, this.createRole(NS_WSDL2TM+"OperationInput-Role", roleType, 
-					new NameE("Role Operation Input", english),
-					new NameE("Element Operation Input", deutsch))
+					new NameE("Input", english),
+					new NameE("Eingabe", deutsch))
 			);
 			roles.put(WSDLRoles.operation_output, this.createRole(NS_WSDL2TM+"OperationOutput-Role", roleType, 
-					new NameE("Role Operation Output", english),
-					new NameE("Element Operation Output", deutsch))
+					new NameE("Output", english),
+					new NameE("Ausgabe", deutsch))
 			);
 			roles.put(WSDLRoles.operation_fault, this.createRole(NS_WSDL2TM+"OperationFault-Role", roleType, 
-					new NameE("Role Operation Fault", english),
-					new NameE("Element Operation Fault", deutsch))
+					new NameE("Operation Fault", english),
+					new NameE("Funktionsfehler", deutsch))
 			);
 			roles.put(WSDLRoles.message, this.createRole(NS_WSDL2TM+"Message-Role", roleType, 
-					new NameE("Role Message", english),
-					new NameE("Element Message", deutsch))
+					new NameE("Message", english),
+					new NameE("Nachricht", deutsch))
 			);
 			roles.put(WSDLRoles.part, this.createRole(NS_WSDL2TM+"MessagePart-Role", roleType, 
-					new NameE("Role Message Part", english),
-					new NameE("Element Message Part", deutsch))
+					new NameE("Message Part", english),
+					new NameE("Nachrichtenparameter", deutsch))
 			);
 			roles.put(WSDLRoles.types, this.createRole(NS_WSDL2TM+"Types-Role", roleType, 
-					new NameE("Role Types", english),
-					new NameE("Element Types", deutsch))
+					new NameE("Type Definition", english),
+					new NameE("Typendefinition", deutsch))
 			);
 			
 			return roles;
@@ -642,11 +906,113 @@ public class WebService2TopicMapFactory implements Factory {
 			Iterator<Service> it_service = wsdl.getServices().values().iterator();
 			while (it_service.hasNext()) {
 				Service s = it_service.next();
-				this.associateTopics(s);
+				
+				/*
+				 * Simplified Topic Map structure due to reduce the complexity
+				 * and create a better overview.
+				 * Occurrences can be retrieved fast nower.
+				 */
+				this.initiateServiceToTopicMap(s, wsdl.getTypes());
+//				this.associateTopics(s);
 			}
 		}
 		
 		
+		@SuppressWarnings("unchecked")
+		private void initiateServiceToTopicMap(Service s, Types t) {
+			
+			TopicE serviceE = this.createTopic(s.getQName(), IDs.ItemIdentifier);
+			if (serviceE.exists()) {
+				return;
+			}
+			
+			Topic service = serviceE.getTopic();
+			service.addType(topicTypes.get(WSDLTopic.service));
+			
+			Iterator<Port> it_ports = s.getPorts().values().iterator();
+			while (it_ports.hasNext()) {
+				Port port = it_ports.next();
+				this.addOccurrences(service, port.getExtensibilityElements().iterator());
+				this.addOccurrences(service, port.getBinding().getExtensibilityElements().iterator());
+				this.addOccurrences(service, port.getBinding().getPortType().getExtensibilityElements().iterator());
+				
+				HashMap<String, BindingOperation> map_binop = new HashMap<String, BindingOperation>();
+				Iterator<BindingOperation> it_binop = port.getBinding().getBindingOperations().iterator();
+				while (it_binop.hasNext()) {
+					BindingOperation binop = it_binop.next();
+					map_binop.put(tns+binop.getName(), binop);
+				}
+				
+				Iterator<Operation> it_op = port.getBinding().getPortType().getOperations().iterator();
+				while (it_op.hasNext()) {
+					Operation op = it_op.next();
+					
+					Topic opT = this.associateTopics(s, op,
+							topicTypes.get(WSDLTopic.service), 
+							topicTypes.get(WSDLTopic.operation),
+							topicRoles.get(WSDLRoles.service),
+							topicRoles.get(WSDLRoles.operation),
+							WSDLAssociation.relation_service_operation);
+					
+					BindingOperation binop = map_binop.get(tns+ op.getName());
+					this.addOccurrences(opT, binop.getExtensibilityElements().iterator());
+					
+					this.associateTopics(op, op.getInput().getMessage(), topicRoles.get(WSDLRoles.operation_input), binop.getBindingInput().getExtensibilityElements().iterator());
+					this.associateTopics(op, op.getOutput().getMessage(), topicRoles.get(WSDLRoles.operation_output), binop.getBindingOutput().getExtensibilityElements().iterator());
+					
+					Iterator<Fault> it = op.getFaults().values().iterator();
+					while (it.hasNext()) {
+						Fault fault = it.next();
+						BindingFault binFault = binop.getBindingFault(fault.getName());
+						this.associateTopics(op, fault.getMessage(), topicRoles.get(WSDLRoles.operation_fault), binFault.getExtensibilityElements().iterator());
+						
+					}
+					
+					
+				}
+				
+			}
+		}
+		
+		@SuppressWarnings("unchecked")
+		private Topic associateTopics(Operation op, Message msg, Topic type, Iterator<ExtensibilityElement> it) {
+			Topic m = this.associateTopics(op, msg, 
+					topicTypes.get(WSDLTopic.operation), 
+					topicTypes.get(WSDLTopic.message), 
+					topicRoles.get(WSDLRoles.operation), 
+					type, 
+					WSDLAssociation.relation_operation_message);
+			
+			this.addOccurrences(m, it);
+			
+			Iterator<Part> it_part = msg.getParts().values().iterator();
+			while (it_part.hasNext()) {
+				Part part = it_part.next();
+				QName qname = new QName(tns, tns);
+				if (part.getTypeName() != null) {
+					// complex or simple type of xsd -> Occurrence
+					 qname = part.getTypeName();
+				} else {
+					// element name of xsd -> Association to next Element (macht wenig Sinn, denn ComplexType kann ArrayOfFloat sein
+					qname = part.getElementName();
+				}
+				
+				TopicE dataE = this.createTopic(qname, IDs.SubjectIdentifier);
+				Topic p = this.associateTopics(msg, part,
+						topicTypes.get(WSDLTopic.message), 
+						dataE.getTopic(),
+						topicRoles.get(WSDLRoles.message),
+						topicRoles.get(WSDLRoles.part),
+						WSDLAssociation.relation_message_part);
+				
+				p.createOccurrence(dataType , unset, dataE.getTopic());
+				
+				
+			}
+			
+			return m;
+		}
+
 		@SuppressWarnings("unchecked")
 		private void associateTopics(Object a) {
 			if (Service.class.isInstance(a)) {
@@ -679,8 +1045,8 @@ public class WebService2TopicMapFactory implements Factory {
 							topicTypes.get(WSDLTopic.binding), 
 							topicTypes.get(WSDLTopic.operation),
 							topicRoles.get(WSDLRoles.binding),
-							topicRoles.get(WSDLRoles.bindingop),
-							WSDLAssociation.relation_binding_operation);
+							topicRoles.get(WSDLRoles.operation),
+							WSDLAssociation.relation_service_operation);
 					this.associateTopics(op);
 				}
 				if (bin.getPortType() != null) {
@@ -697,13 +1063,13 @@ public class WebService2TopicMapFactory implements Factory {
 				this.associateTopics(op, op.getBindingInput(),							
 						topicTypes.get(WSDLTopic.operation), 
 						topicTypes.get(WSDLTopic.bindingop_input), 
-						topicRoles.get(WSDLRoles.bindingop), 
+						topicRoles.get(WSDLRoles.operation), 
 						topicRoles.get(WSDLRoles.bindingop_input), 
 						WSDLAssociation.relation_bindingoperation_input);
 				this.associateTopics(op, op.getBindingOutput(),							
 						topicTypes.get(WSDLTopic.operation), 
 						topicTypes.get(WSDLTopic.bindingop_output), 
-						topicRoles.get(WSDLRoles.bindingop), 
+						topicRoles.get(WSDLRoles.operation), 
 						topicRoles.get(WSDLRoles.bindingop_output), 
 						WSDLAssociation.relation_bindingoperation_output);
 				Iterator<BindingFault> bin_fau = op.getBindingFaults().values().iterator();
@@ -711,7 +1077,7 @@ public class WebService2TopicMapFactory implements Factory {
 					this.associateTopics(op, bin_fau.next(),
 							topicTypes.get(WSDLTopic.operation), 
 							topicTypes.get(WSDLTopic.bindingop_fault), 
-							topicRoles.get(WSDLRoles.bindingop), 
+							topicRoles.get(WSDLRoles.operation), 
 							topicRoles.get(WSDLRoles.bindingop_fault), 
 							WSDLAssociation.relation_bindingoperation_fault);					
 				}
@@ -736,84 +1102,60 @@ public class WebService2TopicMapFactory implements Factory {
 							topicTypes.get(WSDLTopic.operation),
 							topicRoles.get(WSDLRoles.porttype),
 							topicRoles.get(WSDLRoles.operation),
-							WSDLAssociation.relation_porttype_operation);
+							WSDLAssociation.relation_service_operation);
 					this.associateTopics(op);
 				}
 			} else if (Operation.class.isInstance(a)) {
 				Operation op = (Operation) a;
-				this.associateTopics(op, op.getInput(),							
+				this.associateTopics(op, op.getInput().getMessage(),							
 						topicTypes.get(WSDLTopic.operation), 
-						topicTypes.get(WSDLTopic.operation_input), 
+						topicTypes.get(WSDLTopic.message), 
 						topicRoles.get(WSDLRoles.operation), 
 						topicRoles.get(WSDLRoles.operation_input), 
-						WSDLAssociation.relation_operation_input);
-				this.associateTopics(op, op.getOutput(),							
+						WSDLAssociation.relation_operation_message);
+				this.associateTopics(op, op.getOutput().getMessage(),							
 						topicTypes.get(WSDLTopic.operation), 
-						topicTypes.get(WSDLTopic.operation_output), 
+						topicTypes.get(WSDLTopic.message), 
 						topicRoles.get(WSDLRoles.operation), 
 						topicRoles.get(WSDLRoles.operation_output), 
-						WSDLAssociation.relation_operation_output);
+						WSDLAssociation.relation_operation_message);
 				Iterator<Fault> it = op.getFaults().values().iterator();
 				while (it.hasNext()) {
-					this.associateTopics(op, it.next(),
+					Fault fault = it.next();
+					this.associateTopics(op, fault.getMessage(),
 							topicTypes.get(WSDLTopic.operation), 
-							topicTypes.get(WSDLTopic.operation_fault), 
+							topicTypes.get(WSDLTopic.message), 
 							topicRoles.get(WSDLRoles.operation), 
 							topicRoles.get(WSDLRoles.operation_fault), 
-							WSDLAssociation.relation_operation_fault);					
+							WSDLAssociation.relation_operation_message);					
+					this.associateTopics(fault.getMessage());
 				}
 				if (op.getInput() != null) {
-					this.associateTopics(op.getInput());
+					this.associateTopics(op.getInput().getMessage());
 				}
 				if (op.getOutput() != null) {
-					this.associateTopics(op.getOutput());
+					this.associateTopics(op.getOutput().getMessage());
 				}
-			} else if (Input.class.isInstance(a)) {
-				Input i = (Input) a;
-				if (i.getMessage() != null) {
-					this.associateTopics(i, i.getMessage(),
-							topicTypes.get(WSDLTopic.operation_input), 
-							topicTypes.get(WSDLTopic.message),
-							topicRoles.get(WSDLRoles.operation_input),
-							topicRoles.get(WSDLRoles.message),
-							WSDLAssociation.relation_input_message);
-					this.associateTopics(i.getMessage());					
-				}
-			} else if (Output.class.isInstance(a)) {
-				Output o = (Output) a;
-				if (o.getMessage() != null) {
-					this.associateTopics(o, o.getMessage(),
-							topicTypes.get(WSDLTopic.operation_output), 
-							topicTypes.get(WSDLTopic.message),
-							topicRoles.get(WSDLRoles.operation_output),
-							topicRoles.get(WSDLRoles.message),
-							WSDLAssociation.relation_output_message);
-					this.associateTopics(o.getMessage());					
-				}
-			} else if (Fault.class.isInstance(a)) {
-				Fault f = (Fault) a;
-				if (f.getMessage() != null) {
-					this.associateTopics(f, f.getMessage(),
-							topicTypes.get(WSDLTopic.operation_fault), 
-							topicTypes.get(WSDLTopic.message),
-							topicRoles.get(WSDLRoles.operation_fault),
-							topicRoles.get(WSDLRoles.message),
-							WSDLAssociation.relation_fault_message);
-					this.associateTopics(f.getMessage());					
-				}
-				
 			} else if (Message.class.isInstance(a)) {
 				Iterator<Part> it = ((Message) a).getParts().values().iterator();
 				while (it.hasNext()) {
 					Part part = it.next();
+					TopicE dataE = null;
+					if (part.getTypeName() != null) {
+						 dataE = this.createTopic(part.getTypeName(), IDs.SubjectIdentifier);
+					} else {
+						dataE = this.createTopic(part.getElementName(), IDs.SubjectIdentifier);
+					}
 					this.associateTopics(a, part,
 							topicTypes.get(WSDLTopic.message), 
-							topicTypes.get(WSDLTopic.part),
+							dataE.getTopic(),
 							topicRoles.get(WSDLRoles.message),
 							topicRoles.get(WSDLRoles.part),
 							WSDLAssociation.relation_message_part);
 					this.associateTopics(part);
 				}
+			} else if (Part.class.isInstance(a)) {
+				
 			}
 		}
 		
@@ -845,11 +1187,11 @@ public class WebService2TopicMapFactory implements Factory {
 		 * 
 		 */
 		@SuppressWarnings("unchecked")
-		private void associateTopics(Object a, Object b, Topic typea, Topic typeb, Topic ra, Topic rb, WSDLAssociation choose) {
+		private Topic associateTopics(Object a, Object b, Topic typea, Topic typeb, Topic ra, Topic rb, WSDLAssociation choose) {
 			
 			
 			TopicE t;
-			Topic temp = tm.createTopic();
+			Topic temp = null;
 			Topic ta = null;
 			Topic tb = null;
 			
@@ -958,17 +1300,11 @@ public class WebService2TopicMapFactory implements Factory {
 					t = this.createTopic(tns+par.getName());
 					temp = t.getTopic();
 					if (!t.exists()) {
-						if (par.getElementName() != null) {
-							// simple type (xsd or tns goal)
-						} else if (par.getTypeName() != null) {
-							// complex type (xsd or tns goal)
-						}
 						temp.createName(par.getName());
 					}
 				} else if (Types.class.isInstance(obj)) {
 					// actually useless, because types will be recognized via PART-element (see part above)
 					Types typ = (Types) obj;
-					
 				}
 				
 				if (i==0) {
@@ -984,13 +1320,15 @@ public class WebService2TopicMapFactory implements Factory {
 				ta.addType(typea);
 				tb.addType(typeb);
 				
-				this.createAssociation(ascs.get(choose), (ITopic) ta, ra, (ITopic) tb, rb);
+				this.createAssociation(ascs.get(choose), ta, ra, tb, rb);
 				
 			}
+			
+			return tb;
 	
 		}
 
-		private Association createAssociation(Topic ascType, ITopic topic_a, Topic role_a, ITopic topic_b, Topic role_b) {
+		private Association createAssociation(Topic ascType, Topic topic_a, Topic role_a, Topic topic_b, Topic role_b) {
 			
 			for (Association asc : tm.getAssociations()) {
 				if (asc.getRoleTypes().contains(role_a) && asc.getRoleTypes().contains(role_b)) {
@@ -1108,23 +1446,30 @@ public class WebService2TopicMapFactory implements Factory {
 
 		private void addOccurrences(Topic topic, Iterator<ExtensibilityElement> it) {
 			String ns, lp;
+			String NS_SOAP = "http://schemas.xmlsoap.org/wsdl/soap/";
+			String NS_SOAP12 = "http://schemas.xmlsoap.org/wsdl/soap12/";
 			while (it.hasNext()) {
 				ExtensibilityElement e = it.next();
 				ns = e.getElementType().getNamespaceURI();
 				lp = e.getElementType().getLocalPart();
-				if ("http://schemas.xmlsoap.org/wsdl/soap/address".equals(ns+lp)) {
+				if ((NS_SOAP+"address").equals(ns+lp)) {
 					SOAPAddress soa = (SOAPAddress) e;
 					Occurrence occ = topic.createOccurrence(tm.createTopicBySubjectIdentifier(tm.createLocator(NS_WSDL2TM+ "LocationURI")), soa.getLocationURI());
 					occ.getType().createName("Location of Web Service",english);
-				} else if ("http://schemas.xmlsoap.org/wsdl/soap/operation".equals(ns+lp)) {
+				} else if ((NS_SOAP12+"address").equals(ns+lp)) {
+					e.getElementType();
+					SOAP12Address soa = (SOAP12Address) e;
+					Occurrence occ = topic.createOccurrence(tm.createTopicBySubjectIdentifier(tm.createLocator(NS_WSDL2TM+ "LocationURI")), soa.getLocationURI());
+					occ.getType().createName("Location of Web Service",english);					
+				} else if ((NS_SOAP+"operation").equals(ns+lp)) {
 					SOAPOperation soa = (SOAPOperation) e;
 					Occurrence occ = topic.createOccurrence(tm.createTopicBySubjectIdentifier(tm.createLocator(NS_WSDL2TM+"ActionURI")),soa.getSoapActionURI());
 					occ.getType().createName("Action Address", english);
-				} else if ("http://schemas.xmlsoap.org/wsdl/soap/binding".equals(ns+lp)) {
+				} else if ((NS_SOAP+"binding").equals(ns+lp)) {
 					SOAPBinding soa = (SOAPBinding) e;
 					Occurrence occ = topic.createOccurrence(tm.createTopicBySubjectIdentifier(tm.createLocator(NS_WSDL2TM+ "TransportProtocol")), soa.getTransportURI());
 					occ.getType().createName("Transport Protocol", english);
-				} else if ("http://schemas.xmlsoap.org/wsdl/soap/body".equals(ns+lp)) {
+				} else if ((NS_SOAP+"body").equals(ns+lp)) {
 					SOAPBody soa = (SOAPBody) e;
 					// Parts
 					// Use

@@ -11,6 +11,7 @@ import javax.wsdl.WSDLException;
 
 import org.junit.Test;
 
+import de.unileipzig.ws2tm.exception.InitializationException;
 import de.unileipzig.ws2tm.factory.TopicMapEngine;
 
 /**
@@ -23,7 +24,7 @@ public class WSDL2TMTest {
 
 	@Test
 	public void createWSDLInstance1() throws URISyntaxException, WSDLException {
-		File file = new File("wsdl/StockQuoteService.wsdl");
+		File file = new File("wsdl/AWSECommerceService.wsdl");
 		TopicMapEngine.OVERWRITE = true;
 		WebService2TopicMap ws2tm = WebService2TopicMapFactory.createWebService();
 		try {

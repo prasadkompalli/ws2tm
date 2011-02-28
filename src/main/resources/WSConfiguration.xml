@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<configuration>
+	<description>Configuration</description>
+	<comment></comment>
+	<items>
+		<item key="de.ws2tm.ssl.trustStore">/Users/torsten/.trustStore</item>
+		<item key="de.ws2tm.ssl.trustStore.Password">changeit</item>
+		
+		<item key="de.ws2tm.ns.ws2tm">http://ws2tm.org/</item>
+		
+		<item key="de.ws2tm.file.wsdl2tm">tmp/wsdl2tm.xtm</item>
+    <item key="de.ws2tm.file.soap2tm">tmp/soap2tm.xtm</item>
+		
+	</items>
+</configuration>
