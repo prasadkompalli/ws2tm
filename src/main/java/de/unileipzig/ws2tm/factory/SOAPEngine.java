@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -144,9 +145,9 @@ public class SOAPEngine implements Factory {
 	 * @see #sendRequest(SOAPMessage)
 	 */
 	private Message newMessage(RequestObject request) throws SOAPException {
-		MessageImpl impl = new MessageImpl(request);
+		MessageImpl msg = new MessageImpl(request);
 		
-		SOAPMessage r = impl.getRequest();
+		SOAPMessage r = msg.getRequest();
 		
 		for (Operation op : request.getOperations()) {
 			Iterator<Parameter> it = op.getParameters().iterator();
@@ -169,10 +170,9 @@ public class SOAPEngine implements Factory {
 			}
 		}
 		
-		requests.put(impl.request, impl);
-				
+		requests.put(msg.getRequest(), msg);
 		
-		return impl;
+		return msg;
 	}
 
 	
@@ -190,21 +190,17 @@ public class SOAPEngine implements Factory {
 
 		private SOAPMessage request;
 		private SOAPMessage response;
-		private boolean errorOccurred;
 		
 		private Set<SOAPFault> errors;
 		
 		public MessageImpl(RequestObject request) throws SOAPException {
 			this.request = MessageFactory.newInstance().createMessage();
+			this.errors = new HashSet<SOAPFault>();
 		}
 		
 		private void addError(SOAPFault error) {
 			if (error == null) {
 				throw new IllegalArgumentException("The assigned variable has to be initialized as an instance of class javax.xml.soap.SOAPFault");
-			}
-			
-			if (errorOccurred == false) {
-				errorOccurred = true;
 			}
 			
 			this.errors.add(error);
@@ -213,7 +209,10 @@ public class SOAPEngine implements Factory {
 		
 		@Override
 		public boolean errorOccurred() {
-			return errorOccurred;
+			if (this.getErrors().size() > 0) {
+				return true;
+			}
+			return false;
 		}
 
 		@Override
