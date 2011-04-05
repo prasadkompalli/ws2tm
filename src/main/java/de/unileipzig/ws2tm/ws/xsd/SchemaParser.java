@@ -233,10 +233,22 @@ public class SchemaParser implements Factory {
 		return s;
 	}
 	
+	/**
+	 * @param s - instance of class {@link javax.wsdl.extensions.schema.Schema} 
+	 * @param tns - the target name space of the
+	 * @return
+	 */
 	public Schema addSchema(javax.wsdl.extensions.schema.Schema s, String tns) {
-		return this.addSchema((Document) s.getElement(), tns);
+		return this.addSchema((Document) s.getElement().getOwnerDocument(), tns);
 	}
 
+	/**
+	 * Error Handler class, it is static, because all the functionality will be the same no matter how many
+	 * instances of class {@link SchemaParser} may exist (in reality, their exist only one instance: the factory class: {@link SchemaParser#getFactory()})
+	 * 
+	 * @author Torsten Grigull
+	 * @version 0.1 (2011/02/15)
+	 */
 	private static class MyErrorHandler implements ErrorHandler {
 
 		private String ns;

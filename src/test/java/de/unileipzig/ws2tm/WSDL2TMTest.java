@@ -24,7 +24,7 @@ public class WSDL2TMTest {
 
 	@Test
 	public void createWSDLInstance1() throws URISyntaxException, WSDLException {
-		File file = new File("wsdl/AWSECommerceService.wsdl");
+		File file = new File("wsdl/MyWSDL-XSD-Example.wsdl");
 		TopicMapEngine.OVERWRITE = true;
 		WebService2TopicMap ws2tm = WebService2TopicMapFactory.createWebService();
 		try {

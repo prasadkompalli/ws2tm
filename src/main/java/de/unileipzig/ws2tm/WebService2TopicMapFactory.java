@@ -10,6 +10,7 @@ import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,6 +43,9 @@ import org.tmapi.core.Role;
 import org.tmapi.core.Topic;
 import org.tmapi.core.TopicMap;
 import org.tmapi.core.TopicMapExistsException;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 
 import com.sun.xml.xsom.XSType;
 
@@ -138,6 +142,8 @@ public class WebService2TopicMapFactory implements Factory {
 		
 		private TopicMap mergedTopicMap;
 		
+		private Collection<URL> connectionParameters;
+		
 		@Override
 		public TopicMap mergeTopicMaps() {
 			if (merged == true && changeOccurred == false) {
@@ -159,22 +165,16 @@ public class WebService2TopicMapFactory implements Factory {
 				Definition wsdl = WSDLFactory.newInstance().newWSDLReader().readWSDL(wsdlPath);
 				this.wsdl2tm = new WSDL2TMImpl(wsdl, tm);
 				TopicMapEngine.newInstance().write(tm);
-			} catch (MalformedIRIException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			} catch (FactoryConfigurationException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			} catch (IllegalArgumentException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			} catch (TopicMapExistsException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
+				for (Topic t : tm.getTopics()) {
+					if (t.getTypes().contains(tm.getTopicBySubjectIdentifier(tm.createLocator(NS_WSDL+"Service")))) {
+						this.setConnectionParameter(t);
+					}
+				}
+			} catch (FactoryConfigurationException e) {
+				log.fatal("The topic map engine could not be initialized. See error log for more detail.",e);
 			} catch (WSDLException e) {
 				throw new IOException("WSDL could not be retrieved from path "+ wsdlPath, e);
 			}
-
 			return wsdl2tm.load();
 		}
 
@@ -185,21 +185,12 @@ public class WebService2TopicMapFactory implements Factory {
 			}
 			if (soap2tm == null) {
 				try {
-					soap2tm = new SOAP2TMImpl(this.getConnectionParameter());
-				} catch (MalformedIRIException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+					soap2tm = new SOAP2TMImpl(this.getConnectionParameter()[0]);
 				} catch (FactoryConfigurationException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} catch (IllegalArgumentException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} catch (TopicMapExistsException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+					log.fatal("The topic map engine could not be initialized. See error log for more detail.",e);
 				}
 			}
+			
 			this.getConnectionParameter();
 			this.soap2tm.request(this.soap2tm.init(),request);
 			
@@ -230,42 +221,85 @@ public class WebService2TopicMapFactory implements Factory {
 		 * client and web server.
 		 * 
 		 * @return URL containing the host and path to the web service end point
-		 * @throws MalformedURLException if the URL can not be created because an error exists in the url candidate (invalid sign, invalid protocol)
+		 * @throws InitializationException if no valid URL could be found. Somehow still a request exists for using one or more connection URLs
+		 * They probably can not be created because of an error in the so-called url candidate (invalid sign, invalid protocol)
+		 * 
+		 * @see #setConnectionParameter(Topic)
+		 * @see #addConnectionParameter(Occurrence)
+		 * @see #addConnectionParameter(String)
 		 */
-		private URL getConnectionParameter() throws MalformedURLException {
-			Topic service = wsdl2tm.load().getTopicBySubjectIdentifier(wsdl2tm.load().createLocator(WebService2TopicMapFactory.NS_WSDL+"Service"));
-			String address = null;
-			// Retrieve all existing topics of the web service description topic map
-			for (Topic t : wsdl2tm.load().getTopics()) {
-				// Check if the topic has the type NS_WSDL+"Service"
-				if (t.getTypes().contains(service)) {
-					// Retrieve all existing occurrences for topic
-					for (Occurrence o : t.getOccurrences()) {
-						// Check if the type of the occurrence points to NS_WSDL2TM+"LocationURI"
-						if (o.getType().getSubjectIdentifiers().contains(wsdl2tm.load().createLocator(NS_WSDL2TM+ "LocationURI"))) {
-							address = o.getValue();
-							if (log.isDebugEnabled()) {
-								log.debug("Found connection url: "+address);
-							}
-						}
+		private URL[] getConnectionParameter() throws InitializationException {
+			if (this.connectionParameters == null || this.connectionParameters.size() == 0) {
+				throw new InitializationException("");
+			}
+			return (URL[]) this.connectionParameters.toArray();
+		}
+		
+		/**
+		 * This method adds connection urls depending on the assigned occurrence, which is typed by the topic {@link NS_WSDL2TM}/LocationURI.
+		 * The value of the occurrence should 
+		 * @param locationURI - the occurrence, which represents the topic type {@link NS_WSDL2TM}/LocationURI
+		 * @throws MalformedURLException if the found url in the occurrence is invalid (invalid sign, invalid protocol)
+		 * @see #addConnectionParameter(String)
+		 */
+		private void addConnectionParameter(Occurrence locationURI) throws MalformedURLException {
+			if (locationURI.getType().getSubjectIdentifiers().contains(wsdl2tm.load().createLocator(NS_WSDL2TM+ "LocationURI"))) { 
+				this.addConnectionParameter(locationURI.getValue());
+			}
+		}
+		
+		/**
+		 * This method tries to add a url depending if the assigned url candidate, can be transformed to a valid url.
+		 * 
+		 * @param urlCandidate
+		 * @throws MalformedURLException if the found url on the assigned url candidate is invalid (invalid sign, invalid protocol)
+		 * 
+		 * @see #addConnectionParameter(Occurrence)
+		 */
+		private void addConnectionParameter(String urlCandidate) throws MalformedURLException {
+			if (this.connectionParameters == null) {
+				this.connectionParameters = new ArrayList<URL>();
+			}
+			this.connectionParameters.add(new URL(urlCandidate));
+		}
+
+		/**
+		 * This method takes the topic representing an instance of topic type {@link NS_WSDL}/Service.
+		 * It tries to get all occurrences, which are typed by topic {@link NS_WSDL2TM}/LocationURI.
+		 * The value of the found occurrences will be added as an url candidate, which probably represents
+		 * a connection parameter for the current web service.
+		 * 
+		 * @param service - topic, which is typed by topic {@link NS_WSDL}/Service
+		 * @throws MalformedURLException if the found url on the found url candidate is invalid (invalid sign, invalid protocol)
+		 */
+		private void setConnectionParameter(Topic service) throws MalformedURLException {
+			if (service.getTypes().contains(wsdl2tm.load().getTopicBySubjectIdentifier(wsdl2tm.load().createLocator(WebService2TopicMapFactory.NS_WSDL+"Service")))) {
+				for (Occurrence o: service.getOccurrences()) {
+					if (o.getType().getSubjectIdentifiers().contains(wsdl2tm.load().createLocator(NS_WSDL2TM+ "LocationURI"))) {
+						this.addConnectionParameter(o.getValue());
 					}
 				}
 			}
-			if (address == null) {
-				throw new MalformedURLException("Unable to create a valid url because the provided web service description does not contain any connection address.");
-			}
-			
-			return new URL(address);
 		}
 
 	}
 
+	/**
+	 * Implementation for transforming SOAP messages to a topic map. It implements interface {@link TopicMapAccessObject}
+	 * for loading the retrieved data.
+	 * 
+	 * @author Torsten Grigull
+	 * @version 0.1 (2010/12/15)
+	 * @version 0.2 (2011/01/30)
+	 * @version 0.3 (2011/02/12)
+	 *
+	 */
 	private class SOAP2TMImpl implements TopicMapAccessObject {
 
 		private TopicMap tm;
 
 		private URL url;
-		private SOAP2TMImpl(URL url) throws MalformedIRIException, FactoryConfigurationException, IllegalArgumentException, TopicMapExistsException, IOException {
+		private SOAP2TMImpl(URL url) throws MalformedIRIException, FactoryConfigurationException, IllegalArgumentException, IOException {
 			this.tm = TopicMapEngine.newInstance().createNewTopicMapInstance(new File(WebServiceConfigurator.getFileSOAP2TM()), WebService2TopicMapFactory.NS_SOAP2TM);
 			this.url = url;
 		}
@@ -536,9 +570,9 @@ public class WebService2TopicMapFactory implements Factory {
 			this.namespaces = new HashMap<String, URL>();
 			Map<String,String> map = (Map<String,String>) wsdl.getNamespaces();
 			for (Map.Entry<String, String> e : map.entrySet()) {
-				this.addNameSpace(e.getKey(), e.getValue());
+				this.addNameSpace(e.getKey().toLowerCase(), e.getValue());
 			}
-			this.addNameSpace("TNS", this.tns);
+			this.addNameSpace("tns", this.tns);
 			
 			Iterator<ExtensibilityElement> it = wsdl.getTypes().getExtensibilityElements().iterator();
 			while (it.hasNext()) {
@@ -546,26 +580,17 @@ public class WebService2TopicMapFactory implements Factory {
 				QName name = e.getElementType();
 				if (name.getNamespaceURI().equalsIgnoreCase("http://www.w3.org/2001/XMLSchema") && name.getLocalPart().equalsIgnoreCase("schema")) {
 					Schema s = (Schema) e;
-					
-					try {
-						SchemaParser.getFactory().addSchema(name.getNamespaceURI());
-					} catch (IllegalArgumentException e1) {
-						// TODO Auto-generated catch block
-						e1.printStackTrace();
-					} catch (IOException e1) {
-						// TODO Auto-generated catch block
-						e1.printStackTrace();
+					Element ele = s.getElement();
+					Document d = ele.getOwnerDocument();
+					System.out.println("WSDL TargetnameSpace "+tns);
+					int i=1;
+					for (Node node = ele.getAttributes().item(0); node != null; node = ele.getAttributes().item(i++)) {
+						System.out.println("S-Element Attribute ("+ele.getTagName()+") "+node.getNodeName()+": "+node.getNodeValue());
 					}
-					
-					
-//					SchemaParser.addSchema(s);
+					SchemaParser.getFactory().addSchema(s, s.getElement().getNamespaceURI());
 				}
-				
-				System.out.println("Elements: "+it.next().getElementType().getNamespaceURI());
 			}
-			
 			System.exit(2);
-			
 			this.init(wsdl);
 		}
 		
@@ -703,6 +728,18 @@ public class WebService2TopicMapFactory implements Factory {
 			return ascs;
 		}
 
+		/**
+		 * This method creates association types or returns an already existing topic, if the locator
+		 * already exists. The association types are grouped as {@link IDs#SubjectIdentifier}. The 
+		 * association topics will get the same item identifier {@link IDs#ItemIdentifier} linked to
+		 * {@link WebService2TopicMapFactory#NS_WSDL2TM}/sub_category_association_type, and those
+		 * are typed via http://psi.topicmaps.org/tmcl/topic-type.
+		 * 
+		 * @param locator - the address identifying the association
+		 * @param names - one or more instances of class {@link NameE}, which links names (strings) and
+		 * the scopes where the name should be used (which are topics).
+		 * @return the created association as instance of class {@link Topic}
+		 */
 		private Topic createAssociation(Locator locator, NameE... names) {
 			Topic ascType = this.createTopic(locator, IDs.SubjectIdentifier).getTopic();
 			ascType.addType(this.createTopic(NS_WSDL2TM+ "sub_category_association_type", IDs.ItemIdentifier).getTopic());
@@ -713,6 +750,12 @@ public class WebService2TopicMapFactory implements Factory {
 			return ascType;
 		}
 
+		/**
+		 * This method creates the topic types abstracting the WSDL main elements, their sub elements
+		 * and other attributes, which are required for mapping information to these types.
+		 * 
+		 * @return a map where the keys point to {@link WSDLTopic}, and the value is the topic type linked to the key
+		 */
 		private HashMap<WSDLTopic, Topic> createTopicTypes() {
 			HashMap<WSDLTopic, Topic> topics = new HashMap<WSDLTopic, Topic>();
 			Topic topicType = this.createTopic("http://psi.topicmaps.org/tmcl/topic-type", IDs.ItemIdentifier).getTopic();
@@ -767,6 +810,14 @@ public class WebService2TopicMapFactory implements Factory {
 			return topics;
 		}
 		
+		/**
+		 * This method creates a map with a number of role types. These roles types are
+		 * an optional and still somehow required part of linking topics via associations
+		 * or using occurrences and their values in a defined scope.
+		 * 
+		 * @return a map with the keys of class {@link WSDLRoles}, and the role types, defined
+		 * in this method
+		 */
 		private HashMap<WSDLRoles, Topic> createRoles() {
 			HashMap<WSDLRoles, Topic> roles = new HashMap<WSDLRoles, Topic>();
 			Topic roleType = tm.createTopicByItemIdentifier(tm.createLocator("http://psi.topicmaps.org/tmcl/role-type"));
@@ -835,6 +886,19 @@ public class WebService2TopicMapFactory implements Factory {
 			return roles;
 		}
 		
+		/**
+		 * This method creates a role defined by an identifier, which should be a http link
+		 * or something similar, which address one resource, which could be addressed as role,
+		 * it topic type, and its names, which can be one or more instances of class {@link NameE}.
+		 * This names are simple string names, and a linked scope, which does not have to be set.
+		 * 
+		 * @param id - string, which identifies the topic
+		 * @param type - the type of the topic, which should be created
+		 * @param names - the names (name) and the scopes
+		 * @return the created role, which its role type and its linked names with its scopes.
+		 * 
+		 * @see #createRoles()
+		 */
 		private Topic createRole(String id, Topic type, NameE... names) {
 			Topic topic = this.createTopic(id, IDs.SubjectIdentifier).getTopic();
 			if (type != null) {
@@ -918,6 +982,11 @@ public class WebService2TopicMapFactory implements Factory {
 		}
 		
 		
+		/**
+		 * This method 
+		 * @param s
+		 * @param t
+		 */
 		@SuppressWarnings("unchecked")
 		private void initiateServiceToTopicMap(Service s, Types t) {
 			
@@ -926,37 +995,50 @@ public class WebService2TopicMapFactory implements Factory {
 				return;
 			}
 			
+			// First: get every service
 			Topic service = serviceE.getTopic();
 			service.addType(topicTypes.get(WSDLTopic.service));
 			
+			// Second: Iterate through all found ports of a service element
 			Iterator<Port> it_ports = s.getPorts().values().iterator();
 			while (it_ports.hasNext()) {
 				Port port = it_ports.next();
+				// Third: get elements, which extend the current port element, and add them to the current service
 				this.addOccurrences(service, port.getExtensibilityElements().iterator());
+				// Third: add the elements, which extend the binding linked to the current port with the current service
 				this.addOccurrences(service, port.getBinding().getExtensibilityElements().iterator());
+				// Third: add the elements, which extend the porttype, which is linked the to binding of the current port, and add those information to the current service
 				this.addOccurrences(service, port.getBinding().getPortType().getExtensibilityElements().iterator());
 				
 				HashMap<String, BindingOperation> map_binop = new HashMap<String, BindingOperation>();
 				Iterator<BindingOperation> it_binop = port.getBinding().getBindingOperations().iterator();
+				// Fourth: a temporary hash map is created and filled with information of all existing binding operations
 				while (it_binop.hasNext()) {
 					BindingOperation binop = it_binop.next();
 					map_binop.put(tns+binop.getName(), binop);
 				}
 				
 				Iterator<Operation> it_op = port.getBinding().getPortType().getOperations().iterator();
+				// Fourth: After, every element operation of the current port, their binding, and their porttype, which has all operations linked
 				while (it_op.hasNext()) {
 					Operation op = it_op.next();
-					
+					// those operations will be associated with the current service through a pre-defined connection
 					Topic opT = this.associateTopics(s, op,
 							topicTypes.get(WSDLTopic.service), 
 							topicTypes.get(WSDLTopic.operation),
 							topicRoles.get(WSDLRoles.service),
 							topicRoles.get(WSDLRoles.operation),
 							WSDLAssociation.relation_service_operation);
-					
+					// the binding operations have information of great importance like the kind of technologie for the internet connection and so on
 					BindingOperation binop = map_binop.get(tns+ op.getName());
+					// these information are added to the current operation, which is associated with the current service. Therefore both information of binding operation and normal operation are linked in one topic
 					this.addOccurrences(opT, binop.getExtensibilityElements().iterator());
 					
+					/*
+					 * Sixth: in the following three steps the input, output and error messages will be associated with the current operation
+					 * However, another function is used than the previous calls to #associateTopics(Object, Object, Topic, Topic, Topic, Topic, WSDLAssociation)
+					 * The here used associate Topics concentrates on the message and the operation, which is associated with it.
+					 */
 					this.associateTopics(op, op.getInput().getMessage(), topicRoles.get(WSDLRoles.operation_input), binop.getBindingInput().getExtensibilityElements().iterator());
 					this.associateTopics(op, op.getOutput().getMessage(), topicRoles.get(WSDLRoles.operation_output), binop.getBindingOutput().getExtensibilityElements().iterator());
 					
@@ -974,6 +1056,19 @@ public class WebService2TopicMapFactory implements Factory {
 			}
 		}
 		
+		/**
+		 * This functions differs from function {@link #associateTopics(Object, Object, Topic, Topic, Topic, Topic, WSDLAssociation)}. This function
+		 * uses concrete objects, which should be instances of classes {@link Operation} and {@link Message} of the WSDL norm. While
+		 * the topic types are already defined, the role types can change depending if the message concentrates on the {@link Input}, {@link Output}
+		 * or an error ({@link Fault}).
+		 * 
+		 * @param op - instance of class {@link Operation}
+		 * @param msg - instance of class {@link Message}
+		 * @param type - the role type of the instance of class {@link Message}. E.g. {@link WSDLRoles#operation_input},{@link WSDLRoles#operation_output} or {@link WSDLRoles#operation_fault}
+		 * @param it - An iterator for elements, which extend the current message
+		 * @return
+		 * @see #associateTopics(Object, Object, Topic, Topic, Topic, Topic, WSDLAssociation)
+		 */
 		@SuppressWarnings("unchecked")
 		private Topic associateTopics(Operation op, Message msg, Topic type, Iterator<ExtensibilityElement> it) {
 			Topic m = this.associateTopics(op, msg, 
@@ -990,10 +1085,19 @@ public class WebService2TopicMapFactory implements Factory {
 				Part part = it_part.next();
 				QName qname = new QName(tns, tns);
 				if (part.getTypeName() != null) {
+					//TODO add here the xsd schema topic transformation
+					/*
+					 * SchemaParser.getType(part.getTypeName())
+					 * if Type: part.getName();
+					 */
 					// complex or simple type of xsd -> Occurrence
 					 qname = part.getTypeName();
 				} else {
 					// element name of xsd -> Association to next Element (macht wenig Sinn, denn ComplexType kann ArrayOfFloat sein
+					/*
+					 * SchemaParser.getElement(part.getElementName())
+					 * if Element: element.getQName();, element.getType();
+					 */
 					qname = part.getElementName();
 				}
 				
@@ -1460,7 +1564,7 @@ public class WebService2TopicMapFactory implements Factory {
 					e.getElementType();
 					SOAP12Address soa = (SOAP12Address) e;
 					Occurrence occ = topic.createOccurrence(tm.createTopicBySubjectIdentifier(tm.createLocator(NS_WSDL2TM+ "LocationURI")), soa.getLocationURI());
-					occ.getType().createName("Location of Web Service",english);					
+					occ.getType().createName("Location of Web Service",english);
 				} else if ((NS_SOAP+"operation").equals(ns+lp)) {
 					SOAPOperation soa = (SOAPOperation) e;
 					Occurrence occ = topic.createOccurrence(tm.createTopicBySubjectIdentifier(tm.createLocator(NS_WSDL2TM+"ActionURI")),soa.getSoapActionURI());

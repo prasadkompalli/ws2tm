@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Collection;
 import java.util.HashMap;
 
 import org.apache.log4j.Logger;
@@ -27,8 +28,6 @@ public class TopicMapEngine {
 
 	/**
 	 * Factory INSTANCE, which will be return via   {@link #newInstance()}  .
-	 * @uml.property  name="iNSTANCE"
-	 * @uml.associationEnd  
 	 */
 	private static TopicMapEngine INSTANCE = null;
 
@@ -84,6 +83,8 @@ public class TopicMapEngine {
 	 * would be important to extend existing topic maps with the knowledge of
 	 * other topic maps without changing the content of the topic maps.
 	 * 
+	 * @param xtmFile
+	 * 			  - instance of class {@link File}, which will be filled with XTM 2.0 content if the returned instance of class {@link TopicMap} gets content.
 	 * @param baseLocator
 	 *            - Base Locator of a TopicMap as String
 	 * @return An instance of class {@link de.unileipzig.asv.tm2speech.TopicMap}
@@ -103,7 +104,7 @@ public class TopicMapEngine {
 	 * 
 	 * @see #createNewTopicMapInstance(File,Locator)
 	 */
-	public TopicMap createNewTopicMapInstance(File xtmFile, String baseLocator) throws FactoryConfigurationException, MalformedIRIException, IOException, IllegalArgumentException, TopicMapExistsException {
+	public TopicMap createNewTopicMapInstance(File xtmFile, String baseLocator) throws FactoryConfigurationException, MalformedIRIException, IOException, IllegalArgumentException {
 		return this.createTopicMapInstance(xtmFile, this.getTopicMapSystem().createLocator(baseLocator));
 	}
 
@@ -126,11 +127,9 @@ public class TopicMapEngine {
 	 *             not be created
 	 * @throws IllegalArgumentException
 	 *             If one or both parameters contain a null value.
-	 * @throws IOException
-	 *             If the specified file is not readable and writable
 	 * @throws TopicMapExistsException 
 	 */
-	public TopicMap createTopicMapInstance(File xtmFile, Locator loc) throws FactoryConfigurationException, IllegalArgumentException, IOException, TopicMapExistsException {
+	public TopicMap createTopicMapInstance(File xtmFile, Locator loc) throws FactoryConfigurationException, IllegalArgumentException {
 
 		// Test assigned parameters
 		if (loc == null) {
@@ -165,6 +164,13 @@ public class TopicMapEngine {
 		return this.getTopicMapSystem().createLocator(locator);
 	}
 	
+	/**
+	 * @param tm
+	 * @throws IOException if the instance of class {@link FileOutputStream} could not be created, or the writing process was interrupted by the operation system.
+	 * 
+	 * @see XTM20TopicMapWriter
+	 * @see XTM20TopicMapWriter#write
+	 */
 	public void write(TopicMap tm) throws IOException {
 		if (!topicmaps.containsKey(tm)) {
 			throw new IllegalArgumentException("The assigned topic map instance does not exist");
@@ -183,13 +189,70 @@ public class TopicMapEngine {
 	 * This method links the assigned file with the assigned topic map.
 	 * This may overwrite the saved settings, therefore the topic map will be written to the new assigned file.
 	 * After, this function calls method {@link #write(TopicMap)}.
+	 * @param file - instance of class {@link File}, which will contain the content of the assigned instance of class {@link TopicMap}
+	 * @param tm - instance of class {@link TopicMap}. Its content will be written to an external file in XTM 2.0
+	 * @throws IOException  - 
+	 * 
 	 * @see #write(TopicMap)
 	 */
 	public void write(File file, TopicMap tm) throws IOException {
-		topicmaps.put(tm, file);
+		this.add(tm, file);
 		this.write(tm);
 	}
 	
+	/**
+	 * Setter method 
+	 * @param tm
+	 * @param file
+	 */
+	public void add(TopicMap tm, File file) {
+		topicmaps.put(tm, file);
+	}
+	
+	/**
+	 * Check if an instance of class {@link TopicMap} is associated with this factory class, and if it could be used (written, read etc.)
+	 * @param tm - instance of class {@link TopicMap}
+	 * @return <code>true</code>: if the instance of class {@link TopicMap} could be found (linked with a file map via this factory class), otherwise <code>false</code>
+	 */
+	public boolean contains(TopicMap tm) {
+		if (this.getTopicMaps().contains(tm)) {
+			return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * Check if a file is already in use with thie factory class. Important, if you do not want to overwrite a topic map
+	 * @param file - check if the parameter file does exist (linked with a topic map)
+	 * @return <code>true</code>: if the file could be found (linked with a topic map via this factory class), otherwise <code>false</code>
+	 */
+	public boolean contains(File file) {
+		for (TopicMap tm : this.getTopicMaps()) {
+			if (this.getFile(tm) == file) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	/**
+	 * Getter method for returning all existing topic maps, which are associated with this factory class (in use, written down, read currently)
+	 * @return instances of class {@link TopicMap} which are currently in use with this factory class
+	 * @see #getFile(TopicMap)
+	 */
+	public Collection<TopicMap> getTopicMaps() {
+		return topicmaps.keySet();
+	}
+	
+	/**
+	 * Getter method for getting the file associated with the assigned topic map
+	 * 
+	 * @param tm - an instance of class {@link TopicMap}, which is associated with the searched file
+	 * @return an instance of class {@link File} if the assigned topic map is associated and if it exists. Otherwise <code>null</code> will be returned.
+	 */
+	public File getFile(TopicMap tm) {
+		return topicmaps.get(tm);
+	}
 	
 	/**
 	 * Private method, which returns an instance of class {@link TopicMapSystem}
@@ -203,8 +266,7 @@ public class TopicMapEngine {
 	 * 
 	 * @return an instance of class {@link TopicMapSystem}
 	 */
-	private TopicMapSystem getTopicMapSystem()
-			throws FactoryConfigurationException {
+	private TopicMapSystem getTopicMapSystem() throws FactoryConfigurationException {
 		/*
 		 * Setting up required objects for a TopicMap creation.
 		 */
@@ -216,7 +278,7 @@ public class TopicMapEngine {
 						+ TopicMapEngine.class.getSimpleName() + ". "
 						+ TopicMapSystem.class.getSimpleName()
 						+ " instance could not be created: " + e.getMessage());
-				e.printStackTrace();
+				throw new FactoryConfigurationException(e);
 			}
 		}
 

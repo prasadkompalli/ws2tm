@@ -34,8 +34,15 @@ public class SchemaImpl implements Schema {
 	private static final QName currentType = new QName(NS_XS,"Type");
 	
 	private final Document document;
-
+	
+	private final HashMap<String, String> namespaces;
+	
 	private final String tns;
+	
+	/**
+	 * This 
+	 */
+	private final String ns;
 	
 	//TODO
 	
@@ -50,9 +57,32 @@ public class SchemaImpl implements Schema {
 			
 	public SchemaImpl(Document dom, String targetNameSpace) {
 		document = dom;
-		tns = targetNameSpace;
-		log.info("Parsing XML Schema with namespace "+tns);
+		this.namespaces = new HashMap<String,String>();
+		int i = 0;
+		org.w3c.dom.Element node = dom.getDocumentElement();
+		System.out.println(node.getNodeName());
+		if (node.hasAttributes()) {
+			for (Node att = node.getAttributes().item(i++); att != null; att = node.getAttributes().item(i++)) {
+				QName q = this.createQName(att.getNodeName(), att.getNodeValue());
+				this.namespaces.put(q.getPrefix(), q.getNamespaceURI());
+			}
+		}
+		String tns = this.namespaces.get("tns");
+		if (tns == null) {
+			this.tns = targetNameSpace;
+		} else {
+			this.tns = tns;
+		}
+		
+		String ns = this.namespaces.get("-");
+		if (ns == null) {
+			this.ns = tns;
+		} else {
+			this.ns = ns;
+		}
+		log.info("Parsing XML Schema with namespace "+this.tns);
 
+		System.exit(2);
 		//TODO Xerces 2.0.2 supports only the following two lines...
 //		dom.getDomConfig().setParameter("create-cdata-nodes", false);
 //		dom.getDomConfig().setParameter("comments", false);
@@ -66,7 +96,7 @@ public class SchemaImpl implements Schema {
 		this.getTypes().remove(currentType);
 
 	}
-
+	
 	@Override
 	public Element getElement(QName qname) {
 		if (elements.containsKey(qname)) {
@@ -100,6 +130,25 @@ public class SchemaImpl implements Schema {
 			this.addType(qname, t);
 			return t;
 		}
+	}
+
+	@Override
+	public Collection<Element> getElements() {
+		return this.elements.values();
+	}
+
+	@Override
+	public Collection<Type> getTypes() {
+		return this.types.values();
+	}
+
+	@Override
+	public String getTargetNameSpace() {
+		return this.tns;
+	}
+	
+	public String getNameSpace() {
+		return this.ns;
 	}
 
 	private void addType(QName q, Type t) {
@@ -177,43 +226,68 @@ public class SchemaImpl implements Schema {
 		return new int[]{min, max};
 	}
 	
+	/**
+	 * @param node
+	 * @return
+	 */
+	private QName createQName(Node node) {
+		Node name = node.getAttributes().getNamedItem("name");
+		Node ref = node.getAttributes().getNamedItem("ref");
+		if (name != null && name.getNodeValue().length() > 0) {
+			return this.createQName(name.getNodeValue());
+		} else if (ref != null && ref.getNodeValue().length() > 0) {
+			return this.createQName(ref.getNodeValue());
+		}
+		return null;
+	}
+
+	/**
+	 * @param qname
+	 * @return
+	 */
+	private QName createQName(String qname) {
+		QName q = null;
+		if (qname.contains(":")) {
+			String[] arr = qname.split(":");
+			if (arr.length == 2) {
+				q = new QName(this.document.lookupNamespaceURI(arr[0]), arr[1], arr[0]);
+			}
+		} else if (qname.contains("/")) {
+			String[] arr = qname.split("/");
+			StringBuffer ns = new StringBuffer();
+			for (int i = 0; i < arr.length-1; i++) {
+				ns.append(arr[i]+"/");
+			}
+			q = new QName(ns.toString(), arr[arr.length-1], this.document.lookupPrefix(ns.toString()));
+		} else {
+			q = new QName(this.getNameSpace(), qname);
+		}
+		return q;
+	}
+
+	private QName createQName(String nodeName, String nodeValue) throws IllegalArgumentException {
+		QName q = null;
+		if (!nodeName.startsWith("xmlns")) {
+			if (nodeName.equalsIgnoreCase("targetnamespace")) {
+				q = new QName(nodeValue, "undefined", "tns");
+			} else {
+				throw new IllegalArgumentException("The assigned values need to specify a xml name space: e.g. xmlns=\"http://anUri.com\" or targetNameSpace=\"http://anUri.com\"");
+			}
+		}
+		if (nodeName.contains(":")) {
+			q = new QName(nodeValue, "undefined", nodeName.split(":")[1]);
+		} else {
+			q = new QName(nodeValue, "undefined", "-");
+		}
+		return q;
+	}
+	
 	private String getNodeName(Node node) {
 		String name = new String();
 		if (node.getLocalName() != null) {
 			name = node.getLocalName();
 		}
 		return name;
-	}
-	
-	@Override
-	public Collection<Element> getElements() {
-		return this.elements.values();
-	}
-
-	@Override
-	public Collection<Type> getTypes() {
-		return this.types.values();
-	}
-
-	@Override
-	public String getTargetNameSpace() {
-		return this.tns;
-	}
-	
-
-	/**
-	 * @param node
-	 */
-	private void followNode(Node node) {
-		if (node != null) {
-			this.checkNode(node);
-			if (node.hasChildNodes()) {
-				NodeList list = node.getChildNodes();
-				for (int i=0; i < list.getLength(); i++) {
-					this.followNode(list.item(i));
-				}
-			}
-		}
 	}
 	
 	/**
@@ -235,11 +309,28 @@ public class SchemaImpl implements Schema {
 	/**
 	 * @param node
 	 */
+	private void followNode(Node node) {
+		if (node != null) {
+			this.checkNode(node);
+			if (node.hasChildNodes()) {
+				NodeList list = node.getChildNodes();
+				for (int i=0; i < list.getLength(); i++) {
+					this.followNode(list.item(i));
+				}
+			}
+		}
+	}
+	
+	/**
+	 * @param node
+	 */
 	private void checkNode(Node node) {
 		String name = node.getLocalName();
 		if (name == null || name.length() == 0) {
+			// IGNORE nodes, which do not have a local name specified. These are not important at all and will procude errors for sure
 			return;
 		}
+		System.out.println(node.getNamespaceURI()+" - "+name);
 		
 		if (name.equalsIgnoreCase("INCLUDE")) {
 			// INCLUDE ############################## BEGIN
@@ -312,45 +403,6 @@ public class SchemaImpl implements Schema {
 			this.addNodeInformationUnion(node);
 		}
 		
-	}
-	
-	/**
-	 * @param node
-	 * @return
-	 */
-	private QName createQName(Node node) {
-		Node name = node.getAttributes().getNamedItem("name");
-		Node ref = node.getAttributes().getNamedItem("ref");
-		if (name != null && name.getNodeValue().length() > 0) {
-			return this.createQName(name.getNodeValue());
-		} else if (ref != null && ref.getNodeValue().length() > 0) {
-			return this.createQName(ref.getNodeValue());
-		}
-		return null;
-	}
-
-	/**
-	 * @param qname
-	 * @return
-	 */
-	private QName createQName(String qname) {
-		QName q = null;
-		if (qname.contains(":")) {
-			String[] arr = qname.split(":");
-			if (arr.length == 2) {
-				q = new QName(this.document.lookupNamespaceURI(arr[0]), arr[1], arr[0]);
-			}
-		} else if (qname.contains("/")) {
-			String[] arr = qname.split("/");
-			StringBuffer ns = new StringBuffer();
-			for (int i = 0; i < arr.length-1; i++) {
-				ns.append(arr[i]+"/");
-			}
-			q = new QName(ns.toString(), arr[arr.length-1], this.document.lookupPrefix(ns.toString()));
-		} else {
-			q = new QName(this.tns, qname);
-		}
-		return q;
 	}
 	
 	/**
@@ -710,7 +762,7 @@ public class SchemaImpl implements Schema {
 		if (name != null && name.getNodeValue().length() > 0) {
 			t = new Type(this.createQName(name.getNodeValue()));
 		} else if (element != null && element.getLocalName().equalsIgnoreCase("element")) {
-			QName q = new QName(tns,this.getCurrentElement().getName()+"AnonymousTypeDefinition");
+			QName q = new QName(this.getTargetNameSpace(),this.getCurrentElement().getName()+"AnonymousTypeDefinition");
 			t = new Type(q);
 			this.getCurrentElement().setType(t);
 			log.debug("Current Element follows type definition "+q);
