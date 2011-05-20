@@ -29,7 +29,7 @@ public interface WebService2TopicMap {
 	
 	public boolean authenticationRequired();
 	
-	public void setAuthenticationParameter(String user, String pw);
+	public Authentication setAuthenticationParameter(String user, String pw);
 	
 	public Authentication getAuthentication();	
 }

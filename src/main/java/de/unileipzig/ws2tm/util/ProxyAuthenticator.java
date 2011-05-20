@@ -20,13 +20,15 @@ public class ProxyAuthenticator extends Authenticator {
 	private String user, pw;
 	
 	/**
-	 * 
+	 * @param user 
+	 * @param pw 
 	 */
 	public ProxyAuthenticator(String user, String pw) {
 		this.user = user;
 		this.pw = pw;
 	}
 
+	@Override
 	protected PasswordAuthentication getPasswordAuthentication() {
 		return new PasswordAuthentication(user, pw.toCharArray());
 	}

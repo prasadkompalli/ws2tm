@@ -1,6 +1,7 @@
 package de.unileipzig.ws2tm.soap;
 
 import java.io.IOException;
+import java.net.URL;
 
 import javax.xml.namespace.QName;
 import javax.xml.soap.SOAPException;
@@ -22,7 +23,7 @@ public class SOAPEngineTest {
 		Operation op = request.addOperation(new QName("http://example.org/operation#","CallWebService","o"));
 		op.addParameter(new QName("parameter"), "64");
 		
-		msg = SOAPEngine.newInstance().requestWebService(request);
+		msg = SOAPEngine.newInstance(new URL("http://example.org")).sendMessage(request);
 	}
 		
 }

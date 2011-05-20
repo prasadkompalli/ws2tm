@@ -22,7 +22,8 @@ import org.tmapix.io.XTMVersion;
 /**
  * <b>TopicMapEngine</b> <p> <i>TopicMapEngine</i> is intended, to create topic map instances of interface {@link de.unileipzig.asv.tm2speech.TopicMap} . </p>
  * @author  Torsten Grigull
- * @version  0.1 2010/08/01
+ * @version  0.1 (2010/08/01)
+ * 
  */
 public class TopicMapEngine {
 
@@ -165,7 +166,7 @@ public class TopicMapEngine {
 	}
 	
 	/**
-	 * @param tm
+	 * @param tm - the topic map which is associated via this factory with an instance of class {@link File}, which will be filled with the information of the topic map in the XTM 2.0 standard
 	 * @throws IOException if the instance of class {@link FileOutputStream} could not be created, or the writing process was interrupted by the operation system.
 	 * 
 	 * @see XTM20TopicMapWriter

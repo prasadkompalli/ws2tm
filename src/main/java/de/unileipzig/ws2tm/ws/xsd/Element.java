@@ -11,6 +11,7 @@ import de.unileipzig.ws2tm.ws.xsd.Type.ListElement;
  * @author Torsten Grigull
  * @version 0.1 (2011/02/23)
  */
+//TODO documentation needed for the methods and the class itself
 public class Element implements Comparable<Element>, ListElement {
 	QName name;
 	QName type;
@@ -32,6 +33,7 @@ public class Element implements Comparable<Element>, ListElement {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (IOException e) {
+			
 		}
 	}
 
@@ -79,6 +81,7 @@ public class Element implements Comparable<Element>, ListElement {
 		return false;
 	}
 
+	@Override
 	public int compareTo(Element e) {
 		if (this.getQName() == e.getQName()) {
 			return 0;

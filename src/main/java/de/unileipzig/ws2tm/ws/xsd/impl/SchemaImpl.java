@@ -44,8 +44,6 @@ public class SchemaImpl implements Schema {
 	 */
 	private final String ns;
 	
-	//TODO
-	
 	/**
 	 * 
 	 */
@@ -92,7 +90,7 @@ public class SchemaImpl implements Schema {
 		this.checkNodeList(dom.getElementsByTagNameNS(NS_XS, "complexType"));
 		this.checkNodeList(dom.getElementsByTagNameNS(NS_XS, "simpleType"));
 		
-		this.getTypes().remove(currentElement);
+		this.getElements().remove(currentElement);
 		this.getTypes().remove(currentType);
 
 	}
@@ -600,24 +598,24 @@ public class SchemaImpl implements Schema {
 	 * @param node
 	 * @return instance of class {@link Type} containing the information of the Document {@link Node} with the localname <i>GROUP</i>.
 	 */
-	private Type addNodeInformationGroup(Node node) {
+	private Element addNodeInformationGroup(Node node) {
 		Node ref = node.getAttributes().getNamedItem("ref");
-		Type grp;
+		Element grp;
 		if (ref != null && ref.getNodeValue().length() > 0) {
-			grp = this.getType(this.createQName(ref.getNodeValue()));
+			grp = this.getElement(this.createQName(ref.getNodeValue()));
+			int[] minmax = this.getMinMaxOccurringInformation(node);
 			if (grp != null) {
-				this.getCurrentType().addElements(grp.getElementsQName());
+				this.getCurrentType().addElement(grp, minmax[0], minmax[1]);
 			}
 		} else {
-			grp = new Type();
+			grp = new Element();
 			int i = 1;
 			for (Node att = node.getAttributes().item(0); att != null; att = node.getAttributes().item(i++)) {
 				if (att.getNodeName().equalsIgnoreCase("name")){
 					grp.setQName(this.createQName(att.getNodeValue()));
 				}
-				//TODO min and max occurs...
 			}
-			this.addType(grp.getQName(), grp);
+			this.setCurrentElement(grp);
 		}
 		return grp;
 	}

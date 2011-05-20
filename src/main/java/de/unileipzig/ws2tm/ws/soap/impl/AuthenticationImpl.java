@@ -14,7 +14,6 @@ import de.unileipzig.ws2tm.ws.soap.Authentication;
  */
 public class AuthenticationImpl implements Authentication {
 
-	boolean securityRequired;
 	private String pw;
 	private String userName;
 
@@ -26,7 +25,10 @@ public class AuthenticationImpl implements Authentication {
 
 	@Override
 	public boolean securityRequired() {
-		return securityRequired;
+		if (this.pw != null && this.userName != null) {
+			return true;
+		}
+		return false;
 	}
 
 	@Override
@@ -45,7 +47,6 @@ public class AuthenticationImpl implements Authentication {
 		if (pw == null || pw.length() == 0) {
 			throw new NullPointerException();
 		}
-		this.securityRequired = true;
 		this.pw = pw;
 	}
 	
@@ -54,6 +55,5 @@ public class AuthenticationImpl implements Authentication {
 		if (name == null || name.length() == 0) {
 			throw new NullPointerException();
 		}
-		this.securityRequired = true;
 		this.userName = name;
 	}}

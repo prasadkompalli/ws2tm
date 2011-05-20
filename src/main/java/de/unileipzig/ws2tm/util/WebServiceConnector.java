@@ -1,6 +1,3 @@
-/**
- * 
- */
 package de.unileipzig.ws2tm.util;
 
 import java.io.BufferedReader;
@@ -21,6 +18,9 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -31,6 +31,8 @@ import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import javax.xml.namespace.QName;
+import javax.xml.soap.MimeHeader;
+import javax.xml.soap.MimeHeaders;
 import javax.xml.soap.SOAPElement;
 import javax.xml.soap.SOAPException;
 import javax.xml.soap.SOAPMessage;
@@ -38,12 +40,14 @@ import javax.xml.soap.SOAPMessage;
 import org.apache.log4j.Logger;
 
 import de.unileipzig.ws2tm.Factory;
+import de.unileipzig.ws2tm.ws.soap.Connection;
 
 /**
  * @author Torsten Grigull
  * @version 0.1 (2011/02/03)
  *
  */
+//TODO currently only http requests and responses, but no rpc calls or something else supported
 public class WebServiceConnector implements Factory {
 
 	private static String HTTP1_1 = "HTTP/1.1";
@@ -59,36 +63,74 @@ public class WebServiceConnector implements Factory {
 	private URL url;
 	
 	/**
-	 * Constructor of factory class 
+	 * Constructor of class: FACTORY constructor
+	 *
+	 * @param file
+	 * @param pw
 	 */
 	private WebServiceConnector(File file, String pw) {
 		log.info("Initializing factory class "+WebServiceConnector.class.getCanonicalName()+". Setting up trustStore for certificates. Existing certificates will be overwritten if the trust- or KeyStore already exists.");
 		System.setProperty("javax.net.ssl.trustStore", file.getAbsolutePath());
 		System.setProperty("javax.net.ssl.trustStorePassword", pw);
 		
+		
+		// the next lines are using class WebServiceConnector to establish to send and receive the response
+		if (WebServiceConfigurator.isProxySettingExisting()) {
+			setProxySettings(WebServiceConfigurator.getProxyIP(), WebServiceConfigurator.getProxyPort());
+		}
+		if (WebServiceConfigurator.isProxyAuthenticationExisting()) {
+			setProxyAuthentification(WebServiceConfigurator.getProxyUserName(), WebServiceConfigurator.getProxyUserPassword());
+		}		
+		
 		this.ws = new HashMap<URL,WebServiceConnector>();
 	}
 	
+	/**
+	 * Constructor of class
+	 *
+	 * @param url
+	 */
 	public WebServiceConnector(URL url) {
 		this.url = url;
+		
 	}
 	
+	/**
+	 * @param url
+	 * @return
+	 */
 	public static WebServiceConnector newConnection(URL url) {
 		return FACTORY.newInstance(url);
 	}
 	
+	/**
+	 * @param host
+	 * @param port
+	 */
 	public static void setProxySettings(String host, String port) {
 		System.setProperty("http.proxyHost", host);
 		System.setProperty("http.proxyPort", port);
 	}
 	
+	/**
+	 * @param user
+	 * @param pw
+	 */
 	public static void setProxyAuthentification(String user, String pw) {
 		Authenticator.setDefault(new ProxyAuthenticator(user, pw));
 	}
 	
+	/**
+	 * @param url
+	 * @return
+	 */
 	private WebServiceConnector newInstance(URL url) {
+		if (ws.containsKey(url)) {
+			return ws.get(url);
+		}
 		WebServiceConnector wsc = new WebServiceConnector(url);
-		this.ws.put(url, wsc);
+		
+		ws.put(url, wsc);
 		return wsc;
 	}
 	
@@ -157,9 +199,9 @@ public class WebServiceConnector implements Factory {
 	 * an inputstream.
 	 * 
 	 * @param msg - instance of class {@link SOAPMessage} containing the operations and parameters required for a proper request.
-	 * @return an instance of class {@link InputStream}, which is associatied with the content address with the provided URL address
+	 * @return an implementation of interface {@link Connection}, which encapsulates mime headers and the content of the web service response.
 	 */
-	public InputStream sendRequest(SOAPMessage msg) {
+	public Connection sendRequest(SOAPMessage msg) {
 		String requestText = this.createConnectionText(msg);
 		
 		if (log.isDebugEnabled()) {
@@ -167,7 +209,7 @@ public class WebServiceConnector implements Factory {
 		}
 		
 		HttpURLConnection conn = null;
-		if (url.getProtocol().startsWith("https")) {
+		if (url.getProtocol().toLowerCase().startsWith("https")) {
 			try {
 				conn = (HttpsURLConnection) url.openConnection();
 				((HttpsURLConnection) conn).setSSLSocketFactory(WebServiceConnector.getSocketFactory());
@@ -175,6 +217,7 @@ public class WebServiceConnector implements Factory {
 				((HttpsURLConnection) conn).setHostnameVerifier(new HostnameVerifier(){
 					@Override
 					public boolean verify(String hostname, SSLSession session) {
+						//TODO implement a valid verification of ssl sessions
 						log.info("Verfiying hostname "+hostname);
 						return true;
 					}});
@@ -190,7 +233,7 @@ public class WebServiceConnector implements Factory {
 		}
 		
 		try {
-			if (this.verify(url)) {
+			if (this.verify(url) && conn != null) {
 				conn.setDoInput(true);
 				
 				if (requestText != null && requestText.length() > 0) {
@@ -206,13 +249,28 @@ public class WebServiceConnector implements Factory {
 					out.close();
 				}
 				conn.connect();
+
+				if (conn.getResponseCode() != 200) {
+					throw new IOException("Server returned wrong and unexcepted http response code: "+conn.getResponseCode()+". "+conn.getResponseMessage());
+				}
+
+				// This should be actually the mime header information collected manually
+/*				conn.getContentLength();
+				conn.getContentType();
+				conn.getContentEncoding();
+				conn.getLastModified();
+				conn.getExpiration();
+				conn.getDate();
+*/
+				MimeHeaders headers = new MimeHeaders();
+				for (Map.Entry<String, List<String>> e : conn.getHeaderFields().entrySet()) {
+					for (String v : e.getValue()) {
+						headers.addHeader(e.getKey(), v);
+					}
+				}
+				
+				return new ConnectionImpl(headers, conn.getInputStream());
 			}
-			
-			if (conn.getResponseCode() != 200) {
-				throw new IOException("Server returned wrong and unexcepted http response code: "+conn.getResponseCode()+". "+conn.getResponseMessage());
-			}
-			
-			return conn.getInputStream();
 		} catch (IOException e) {
 			log.error("Could not send or receive data form web service url "+url.getPath() + " due to an IOException.",e);
 		}
@@ -254,6 +312,28 @@ public class WebServiceConnector implements Factory {
 	private boolean verify(URL url) {
 		//TODO check urls may be a positive white list of entrusted urls and uris via WebServiceConfigurator.
 		return true;
+	}
+	
+	private class ConnectionImpl implements Connection {
+		
+		private InputStream is;
+		private MimeHeaders headers;
+		
+		private ConnectionImpl(MimeHeaders headers, InputStream is) {
+			this.is = is;
+			this.headers = headers;
+		}
+		
+		@Override
+		public InputStream getInputStream() {
+			return this.is;
+		}
+
+		@Override
+		public MimeHeaders getMimeHeaders() {
+			return this.headers;
+		}
+		
 	}
 	
 	/**

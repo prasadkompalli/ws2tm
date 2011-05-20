@@ -74,7 +74,7 @@ public class ConfigurationJaxbImpl implements Configuration {
 	@Override
 	public String getValue(String key) {
 		for (Entry e : this.items) {
-			if (key.equals(e.getKey())) {
+			if (key.equalsIgnoreCase(e.getKey())) {
 				return e.getValue();
 			}
 		}

@@ -4,15 +4,12 @@
 package de.unileipzig.ws2tm.factory;
 
 import java.io.IOException;
-import java.net.HttpURLConnection;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
 
-import javax.wsdl.Definition;
-import javax.wsdl.WSDLException;
-import javax.wsdl.factory.WSDLFactory;
 import javax.xml.soap.MessageFactory;
 import javax.xml.soap.SOAPBodyElement;
 import javax.xml.soap.SOAPException;
@@ -21,30 +18,36 @@ import javax.xml.soap.SOAPMessage;
 
 
 import de.unileipzig.ws2tm.Factory;
+import de.unileipzig.ws2tm.util.WebServiceConnector;
+import de.unileipzig.ws2tm.ws.soap.Connection;
 import de.unileipzig.ws2tm.ws.soap.Operation;
 import de.unileipzig.ws2tm.ws.soap.Parameter;
 import de.unileipzig.ws2tm.ws.soap.RequestObject;
 import de.unileipzig.ws2tm.ws.soap.Message;
 
+//TODO Needs documentation, purpose and so on
 /**
  * @author  Torsten Grigull
  * @version  0.1 (2011/01/14)
  */
 public class SOAPEngine implements Factory {
 
+	private static HashMap<URL,SOAPEngine> INSTANCES;
+	
+	private URL url;
+	
 	/**
-	 * @uml.property  name="iNSTANCE"
-	 * @uml.associationEnd  
+	 * HashMap contains all request, which were created using this instance of class {@link SOAPEngine}.
+	 * Key: {@link SOAPMessage} (Request)
+	 * Value: {@link Message} (Request + Response, including possible Errors).
 	 */
-	private static SOAPEngine INSTANCE;
-	private static Definition wsdl;
+	private HashMap<SOAPMessage,Message> requests = null;
 	
-	private static HashMap<SOAPMessage,Message> requests = null;
-	
-	private SOAPEngine() {
+	private SOAPEngine(URL url) {
 		if (requests == null) {
 			requests = new HashMap<SOAPMessage, Message>();
 		}
+		this.url = url;
 	}
 	
 	/**
@@ -53,106 +56,38 @@ public class SOAPEngine implements Factory {
 	 * 
 	 * This class is therefore the main access point between the web service and the running web service 2 topic map application.
 	 * 
+	 * @param url - this valid instance of class {@link URL} defines the access point, to which soap messages should be sent and from which soap messages can be expected, depending on the web service structure and its purpose
+	 * 
 	 * @return the factory instance of class {@link SOAPEngine}
 	 */
-	public static SOAPEngine newInstance() {
-		if (INSTANCE == null) {
-			INSTANCE = new SOAPEngine();
+	public static SOAPEngine newInstance(URL url) {
+		if (INSTANCES == null) {
+			INSTANCES = new HashMap<URL,SOAPEngine>();
 		}
-		return INSTANCE;
-	}
-	
-	/**
-	 * This method creates instances of class {@link javax.wsdl.Operation}. However, may be these are not required any more. Because
-	 * request and response exist out of different attributes.
-	 * 
-	 * @return an instance of class {@link javax.wsdl.Operation}
-	 * @throws WSDLException this exception is thrown if a wsdl definition cannot be created. An instance is required for creating one or more instances of class {@link javax.wsdl.Operation}
-	 */
-	public static javax.wsdl.Operation newOperation() throws WSDLException {
-		if (wsdl == null) {
-			wsdl = WSDLFactory.newInstance().newDefinition();
+		if (INSTANCES.containsKey(url)) {
+			return INSTANCES.get(url);
 		}
-		return wsdl.createOperation();
+		return INSTANCES.put(url, new SOAPEngine(url));
 	}
 	
 	/**
-	 * @param request - instance of class {@link RequestObject}. This class can be extended to add functionality or to support other
-	 * request types like TMQL requests and so on. 
-	 * @return instance of class {@link Message}, which combines the request and response for the web service in one object
-	 * @throws SOAPException this exception is thrown if the request or response could not be generated
-	 */
-	public Message createMessage(RequestObject request) throws SOAPException {
-		if (INSTANCE == null) {
-			INSTANCE = new SOAPEngine();
-		}
-		return INSTANCE.newMessage(request);
-	}
-	
-	/**
-	 * @param msg
-	 * @return instance of class {@link Message}, which combines the request and response for the web service in one object
-	 * @throws SOAPException this exception is thrown if the request or response could not be generated
-	 * @throws IOException this exception is thrown if an exception occurred during the connection to the web service or during the reception of the response from the web service
-	 * 
-	 * @see #sendRequest(SOAPMessage)
-	 */
-	public Message sendMessage(Message msg) throws SOAPException, IOException {
-		return this.sendRequest(msg.getRequest());
-	}
-	
-	/**
-	 * @param request
-	 * @return instance of class {@link Message}, which combines the request and response for the web service in one object
-	 * @throws SOAPException this exception is thrown if the request or response could not be generated
-	 * @throws IOException this exception is thrown if an exception occurred during the connection to the web service or during the reception of the response from the web service
-	 * 
-	 * @see #sendMessage(Message)
-	 */
-	public Message sendRequest(SOAPMessage request) throws SOAPException, IOException {
-		request.writeTo(System.out);
-		
-		HttpURLConnection conn = (HttpURLConnection) new URL("").openConnection();
-		
-		return requests.get(request);
-	}
-	
-	/**
-	 * This operations combines the creation of a request message and sends the created message right away to the web service.
-	 * The response will be therefore be added to the instance of class {@link Message}, which is also the returned object.
-	 * 
-	 * @see #createMessage(RequestObject)
-	 * @see #sendRequest(SOAPMessage)
-	 * 
-	 * @param request - instance of class {@link RequestObject}. This class can be extended to add functionality or to support other
-	 * request types like TMQL requests and so on. 
-	 * @return instance of class {@link Message}, which combines the request and response for the web service in one object
-	 * @throws SOAPException this exception is thrown if the request or response could not be generated
-	 * @throws IOException this exception is thrown if an exception occurred during the connection to the web service or during the reception of the response from the web service
-	 */
-	public Message requestWebService(RequestObject request) throws SOAPException, IOException {
-		Message msg = this.createMessage(request);
-		return this.sendMessage(msg);
-	}
-	
-	/**
-	 * @param request - an instance of class {@link RequestObject}. This class can be also extended to add functionality or to support higher request languages. Currently
+	 * @param ro - an instance of class {@link RequestObject}. This class can be also extended to add functionality or to support higher request languages. Currently
 	 * the class abstracts only the most required operations to access descriptions of the operations and its parameters. See the class description for further details.
 	 * @return an instance of class {@link Message} with an initialized soap request object, which can be send to the described web service
 	 * @throws SOAPException this exception is thrown if the request or response could not be generated
 	 * 
 	 * @see #sendRequest(SOAPMessage)
 	 */
-	private Message newMessage(RequestObject request) throws SOAPException {
-		MessageImpl impl = new MessageImpl(request);
+	public Message createMessage(RequestObject ro) throws SOAPException {
+		MessageImpl msg = new MessageImpl();
 		
-		SOAPMessage r = impl.getRequest();
+		SOAPMessage request = msg.getRequest();
 		
-		for (Operation op : request.getOperations()) {
+		for (Operation op : ro.getOperations()) {
 			Iterator<Parameter> it = op.getParameters().iterator();
 			SOAPBodyElement soa = null;
 			if (it.hasNext()) {
-				soa = r.getSOAPBody().addBodyElement(op.getQName());				
+				soa = request.getSOAPBody().addBodyElement(op.getQName());				
 			}
 			Parameter par;
 			while (it.hasNext() && soa != null) {
@@ -169,13 +104,79 @@ public class SOAPEngine implements Factory {
 			}
 		}
 		
-		requests.put(impl.request, impl);
-				
+		if (requests.containsKey(request)) {
+			return requests.get(request);
+		}
 		
-		return impl;
+		return requests.put(request, msg);
+		
 	}
-
 	
+	public Message createMessage(SOAPMessage request, SOAPMessage response) {
+		MessageImpl msg = new MessageImpl(request, response);
+		return this.requests.put(request, msg);
+	}
+	
+	public Message createMessage(SOAPMessage request, Connection conn) throws IOException, SOAPException {
+		return this.createMessage(request, MessageFactory.newInstance().createMessage(conn.getMimeHeaders(), conn.getInputStream()));
+	}
+	
+	/**
+	 * @param ro - instance of class {@link RequestObject}, which can be extended or encapsulated (container for operations, their parameters etc.)
+	 * @return instance of class {@link Message}, which combines the request and response for the web service in one object
+	 * @throws SOAPException this exception is thrown if the request or response could not be generated
+	 * @throws IOException this exception is thrown if an exception occurred during the connection to the web service or during the reception of the response from the web service
+	 * 
+	 * @see #sendRequest(SOAPMessage)
+	 */
+	public Message sendMessage(RequestObject ro) throws SOAPException, IOException {
+		return this.sendMessage(this.createMessage(ro));
+	}
+	
+	/**
+	 * @param msg - instance of class {@link Message}, which encapsulates a request and response of a web service. It helps a lot of tracking does parts during a busy communication with a web service
+	 * @return instance of class {@link Message}, which combines the request and response for the web service in one object
+	 * @throws SOAPException this exception is thrown if the request or response could not be generated
+	 * @throws IOException this exception is thrown if an exception occurred during the connection to the web service or during the reception of the response from the web service
+	 * 
+	 * @see #sendRequest(SOAPMessage)
+	 */
+	public Message sendMessage(Message msg) throws SOAPException, IOException {
+		SOAPMessage response = this.sendMessage(msg.getRequest());
+		
+		MessageImpl newMsg = new MessageImpl(msg.getRequest(),response);
+		if (response.getSOAPBody().getFault() != null) {
+			newMsg.addError(response.getSOAPBody().getFault());
+		}
+		return newMsg;
+	}
+	
+	/**
+	 * @param request - instance of class {@link SOAPMessage}, which represents a request to the web service
+	 * @return instance of class {@link Message}, which combines the request and response for the web service in one object
+	 * @throws SOAPException this exception is thrown if the request or response could not be generated
+	 * @throws IOException this exception is thrown if an exception occurred during the connection to the web service or during the reception of the response from the web service
+	 * 
+	 * @see #sendMessage(Message)
+	 */
+	private SOAPMessage sendMessage(SOAPMessage request) throws SOAPException, IOException {
+		request.writeTo(System.out);
+		
+		WebServiceConnector conn = WebServiceConnector.newConnection(this.url);
+		InputStream is = null;
+		SOAPMessage response = null;
+		try {
+			Connection c = conn.sendRequest(request);
+			is = c.getInputStream();
+			response = MessageFactory.newInstance().createMessage(c.getMimeHeaders(), is);
+		} finally {
+			if (is != null) {
+				is.close();
+			}
+		}
+		
+		return response;
+	}
 	
 	/**
 	 * <b>Implementation of Interface {@link SOAPMessage}</b>.
@@ -190,21 +191,30 @@ public class SOAPEngine implements Factory {
 
 		private SOAPMessage request;
 		private SOAPMessage response;
-		private boolean errorOccurred;
 		
 		private Set<SOAPFault> errors;
 		
-		public MessageImpl(RequestObject request) throws SOAPException {
+		public MessageImpl() throws SOAPException {
 			this.request = MessageFactory.newInstance().createMessage();
 		}
 		
+		/**
+		 * Constructor of class
+		 * 
+		 * @param request 
+		 * @param response 
+		 */
+		public MessageImpl(SOAPMessage request, SOAPMessage response) {
+			this.request = request;
+			this.response = response;
+		}
+
+		/**
+		 * @param error
+		 */
 		private void addError(SOAPFault error) {
 			if (error == null) {
 				throw new IllegalArgumentException("The assigned variable has to be initialized as an instance of class javax.xml.soap.SOAPFault");
-			}
-			
-			if (errorOccurred == false) {
-				errorOccurred = true;
 			}
 			
 			this.errors.add(error);
@@ -213,7 +223,10 @@ public class SOAPEngine implements Factory {
 		
 		@Override
 		public boolean errorOccurred() {
-			return errorOccurred;
+			if (this.errors.size() > 0) {
+				return true;
+			}
+			return false;
 		}
 
 		@Override

@@ -24,6 +24,7 @@ public class WebServiceConfigurator implements Factory {
 
 	private static Logger log = Logger.getLogger(WebServiceConfigurator.class);
 	
+	//FIXME this needs a fix, because the configuration will be probably at a different place on any other system (could be in the same directory as the jar, class files etc., or in /etc/ or on a windows file system
 	private static final WebServiceConfigurator FACTORY = new WebServiceConfigurator(new File("./src/main/resources/WSConfiguration.xml"));
 	
 	private Configuration config;
@@ -34,7 +35,7 @@ public class WebServiceConfigurator implements Factory {
 	private WebServiceConfigurator(File file) {
 		log.info("Initializing factory instance of class "+WebServiceConfigurator.class.getCanonicalName());
 		try {
-			config = (Configuration) ConfigurationDAO.newInstance().load(file.getAbsolutePath());
+			config = ConfigurationDAO.newInstance().load(file.getAbsolutePath());
 		} catch (FileNotFoundException e) {
 			log.warn("Could not load configuration from path "+file.getAbsolutePath()+". Will proceed by using an empty configuration.",e);
 		} catch (IOException e) {
@@ -77,5 +78,36 @@ public class WebServiceConfigurator implements Factory {
 	public static String getFileSOAP2TM() {
 		return FACTORY.init().getValue("de.ws2tm.file.soap2tm");
 	}
+	
+	public static boolean isProxySettingExisting() {
+		if (getProxyPort() != null && getProxyIP() != null) {
+			return true;
+		}
+		return false;
+	}
+	
+	public static String getProxyPort() {
+		return FACTORY.init().getValue("de.ws2tm.proxy.port");
+	}
+	
+	public static String getProxyIP() {
+		return FACTORY.init().getValue("de.ws2tm.proxy.ip");
+	}
+	
+	public static boolean isProxyAuthenticationExisting() {
+		if (getProxyUserName() != null && getProxyUserPassword() != null) {
+			return true;
+		}
+		return false;
+	}
+	
+	public static String getProxyUserName() {
+		return FACTORY.init().getValue("de.ws2tm.proxy.user");		
+	}
+	
+	public static String getProxyUserPassword() {
+		return FACTORY.init().getValue("de.ws2tm.proxy.userpw");
+	}
+	
 	
 }
