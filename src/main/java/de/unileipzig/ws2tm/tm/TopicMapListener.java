@@ -1,7 +1,7 @@
 /**
  * 
  */
-package de.unileipzig.ws2tm;
+package de.unileipzig.ws2tm.tm;
 
 import org.tmapi.core.Construct;
 

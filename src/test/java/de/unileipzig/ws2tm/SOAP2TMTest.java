@@ -18,8 +18,8 @@ import org.w3c.dom.DOMException;
 
 import de.topicmapslab.majortom.model.core.ITopic;
 import de.unileipzig.ws2tm.exception.InitializationException;
-import de.unileipzig.ws2tm.factory.TopicMapEngine;
 import de.unileipzig.ws2tm.request.TMQLRequest;
+import de.unileipzig.ws2tm.tm.factory.TopicMapEngine;
 import de.unileipzig.ws2tm.ws.soap.Operation;
 import de.unileipzig.ws2tm.ws.soap.Parameter;
 

@@ -1,4 +1,4 @@
-package de.unileipzig.ws2tm.factory;
+package de.unileipzig.ws2tm.tm.factory;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -16,6 +16,8 @@ import org.tmapi.core.TopicMap;
 import org.tmapi.core.TopicMapExistsException;
 import org.tmapi.core.TopicMapSystem;
 import org.tmapi.core.TopicMapSystemFactory;
+import org.tmapix.io.CTMTopicMapWriter;
+import org.tmapix.io.XTM10TopicMapWriter;
 import org.tmapix.io.XTM2TopicMapWriter;
 import org.tmapix.io.XTMVersion;
 
@@ -34,10 +36,19 @@ public class TopicMapEngine {
 
 	private static HashMap<TopicMap, File> topicmaps = null;
 	
+	public static final int XTM_1_0 = 1;
+	public static final int XTM_2_0 = 2;
+	public static final int XTM_2_1 = 3;
+	
+	private static final int LTM_1_0 = 4;
+	public static final int CTM_1_0 = 5;
+	
 	public static boolean OVERWRITE = false;
 	
-	private TopicMapSystem TMSystem = null;
+	private int sFormat = 0;
 
+	private TopicMapSystem TMSystem = null;
+	
 	/**
 	 * Logging Instance
 	 * 
@@ -57,6 +68,9 @@ public class TopicMapEngine {
 
 		TMSystem = this.getTopicMapSystem();
 		topicmaps = new HashMap<TopicMap, File>();
+		
+		this.setWritingModus(TopicMapEngine.XTM_2_1);
+		
 	}
 
 	/**
@@ -76,7 +90,7 @@ public class TopicMapEngine {
 		}
 		return INSTANCE;
 	}
-
+	
 	/**
 	 * Create a new instance of topic map. This instance will be registered for
 	 * a later use. However, you are able to create an empty or a filled topic
@@ -105,7 +119,7 @@ public class TopicMapEngine {
 	 * 
 	 * @see #createNewTopicMapInstance(File,Locator)
 	 */
-	public TopicMap createNewTopicMapInstance(File xtmFile, String baseLocator) throws FactoryConfigurationException, MalformedIRIException, IOException, IllegalArgumentException {
+	public TopicMap createNewTopicMapInstance(File xtmFile, String baseLocator) throws FactoryConfigurationException, MalformedIRIException, IllegalArgumentException {
 		return this.createTopicMapInstance(xtmFile, this.getTopicMapSystem().createLocator(baseLocator));
 	}
 
@@ -165,6 +179,14 @@ public class TopicMapEngine {
 		return this.getTopicMapSystem().createLocator(locator);
 	}
 	
+	public void setWritingModus(int modus) {
+		if (modus < XTM_1_0 || modus > CTM_1_0) {
+			throw new IllegalArgumentException("Currently this topic map engine supports only XTM writer. XTM 1.0, XTM 2.0 and XTM 2.1 are supported.");
+		}
+		
+		sFormat = modus;
+	}
+	
 	/**
 	 * @param tm - the topic map which is associated via this factory with an instance of class {@link File}, which will be filled with the information of the topic map in the XTM 2.0 standard
 	 * @throws IOException if the instance of class {@link FileOutputStream} could not be created, or the writing process was interrupted by the operation system.
@@ -173,6 +195,10 @@ public class TopicMapEngine {
 	 * @see XTM20TopicMapWriter#write
 	 */
 	public void write(TopicMap tm) throws IOException {
+		this.write(tm, sFormat);
+	}
+	
+	public void write(TopicMap tm, int WRITE_MODUS) throws IOException {
 		if (!topicmaps.containsKey(tm)) {
 			throw new IllegalArgumentException("The assigned topic map instance does not exist");
 		}
@@ -183,7 +209,16 @@ public class TopicMapEngine {
 		}
 		
 		OutputStream out = new FileOutputStream(file);
-		new XTM2TopicMapWriter(out, tm.getLocator().getReference(), XTMVersion.XTM_2_0).write(tm);
+		
+		// TODO add more writer for topic maps
+		switch (WRITE_MODUS) {
+			case XTM_1_0: new XTM10TopicMapWriter(out, tm.getLocator().getReference()).write(tm); break;
+			case XTM_2_0: new XTM2TopicMapWriter(out, tm.getLocator().getReference(), XTMVersion.XTM_2_0).write(tm); break;
+			case XTM_2_1: new XTM2TopicMapWriter(out, tm.getLocator().getReference(), XTMVersion.XTM_2_1).write(tm); break;
+			case CTM_1_0: new CTMTopicMapWriter(out, tm.getLocator().getReference()).write(tm); break;
+			case LTM_1_0: throw new IllegalArgumentException("The LTM Topic Map Writer is currently not supported. Please choose another, e.g. XTM Writer Format");
+			default: throw new IllegalArgumentException("Could not choose a writing system, because an illegal number was set. Please arrange a valid writing modus.");
+		}
 	}
 	
 	/**
@@ -197,6 +232,25 @@ public class TopicMapEngine {
 	 * @see #write(TopicMap)
 	 */
 	public void write(File file, TopicMap tm) throws IOException {
+		this.add(tm, file);
+		this.write(tm);
+	}
+	
+	/**
+	 * This method links the assigned file with the assigned topic map.
+	 * This may overwrite the saved settings, therefore the topic map will be written to the new assigned file.
+	 * After, this function calls method {@link #write(TopicMap)}.
+	 * @param file - instance of class {@link File}, which will contain the content of the assigned instance of class {@link TopicMap}
+	 * @param tm - instance of class {@link TopicMap}. Its content will be written to an external file in XTM 2.0
+	 * @param WRITEMODUS 
+	 * @throws IOException  - 
+	 * 
+	 * @see #write(TopicMap)
+	 * @see #write(TopicMap, int)
+	 * @see #setWritingModus(int)
+	 */
+	public void write(File file, TopicMap tm, int WRITEMODUS) throws IOException {
+		this.setWritingModus(WRITEMODUS);
 		this.add(tm, file);
 		this.write(tm);
 	}

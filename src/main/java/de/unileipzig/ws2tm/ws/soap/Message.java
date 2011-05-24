@@ -8,7 +8,7 @@ import java.util.Set;
 import javax.xml.soap.SOAPFault;
 import javax.xml.soap.SOAPMessage;
 
-import de.unileipzig.ws2tm.factory.SOAPEngine;
+import de.unileipzig.ws2tm.ws.soap.factory.SOAPEngine;
 
 /**
  * <b>Interface Message</b>

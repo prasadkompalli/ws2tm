@@ -8,10 +8,10 @@ import javax.xml.soap.SOAPException;
 
 import org.junit.Test;
 
-import de.unileipzig.ws2tm.factory.SOAPEngine;
 import de.unileipzig.ws2tm.request.TMQLRequest;
 import de.unileipzig.ws2tm.ws.soap.Message;
 import de.unileipzig.ws2tm.ws.soap.Operation;
+import de.unileipzig.ws2tm.ws.soap.factory.SOAPEngine;
 
 public class SOAPEngineTest {
 

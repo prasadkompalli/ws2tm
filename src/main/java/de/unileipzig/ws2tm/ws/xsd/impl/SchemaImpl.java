@@ -80,7 +80,6 @@ public class SchemaImpl implements Schema {
 		}
 		log.info("Parsing XML Schema with namespace "+this.tns);
 
-		System.exit(2);
 		//TODO Xerces 2.0.2 supports only the following two lines...
 //		dom.getDomConfig().setParameter("create-cdata-nodes", false);
 //		dom.getDomConfig().setParameter("comments", false);
@@ -328,7 +327,6 @@ public class SchemaImpl implements Schema {
 			// IGNORE nodes, which do not have a local name specified. These are not important at all and will procude errors for sure
 			return;
 		}
-		System.out.println(node.getNamespaceURI()+" - "+name);
 		
 		if (name.equalsIgnoreCase("INCLUDE")) {
 			// INCLUDE ############################## BEGIN

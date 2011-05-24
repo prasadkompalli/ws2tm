@@ -1,7 +1,7 @@
 /**
  * 
  */
-package de.unileipzig.ws2tm.factory;
+package de.unileipzig.ws2tm.ws.soap.factory;
 
 import java.io.IOException;
 import java.io.InputStream;

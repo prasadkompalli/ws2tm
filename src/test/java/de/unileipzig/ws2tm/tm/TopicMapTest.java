@@ -25,7 +25,7 @@ import org.tmapi.core.TopicMapExistsException;
 import de.topicmapslab.tmclvalidator.TMCLValidator;
 import de.topicmapslab.tmclvalidator.TMCLValidatorException;
 import de.topicmapslab.tmclvalidator.ValidationResult;
-import de.unileipzig.ws2tm.factory.TopicMapEngine;
+import de.unileipzig.ws2tm.tm.factory.TopicMapEngine;
 
 /**
  * @author Torsten Grigull
