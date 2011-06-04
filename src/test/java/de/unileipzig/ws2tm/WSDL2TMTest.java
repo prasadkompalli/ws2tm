@@ -32,7 +32,7 @@ public class WSDL2TMTest {
 		TopicMapEngine.OVERWRITE = true;
 		WebService2TopicMap ws2tm = WebService2TopicMapFactory.createWebService();
 		try {
-			TopicMap tm = ws2tm.newWebService(file.getAbsolutePath());
+			TopicMap tm = ws2tm.newWebService(file.getAbsolutePath()).load();
 
 			/*
 			Topic ascRequestType = tm.createTopicBySubjectIdentifier(tm.createLocator(WebService2TopicMapFactory.NS_SOAP2TM+"WS/Request"));

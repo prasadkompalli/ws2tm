@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.log4j.Logger;
 import org.tmapi.core.FactoryConfigurationException;
@@ -307,6 +308,21 @@ public class TopicMapEngine {
 	 */
 	public File getFile(TopicMap tm) {
 		return topicmaps.get(tm);
+	}
+	
+	/**
+	 * Getter method, to get the topic map associated with the file acting as key.
+	 * 
+	 * @param file - file which is associated with a topic map
+	 * @return the topic map instance which is associated with the file, otherwise return <code>null</code>.
+	 */
+	public TopicMap getTopicMap(File file) {
+		for (Map.Entry<TopicMap, File> e : topicmaps.entrySet()) {
+			if (e.getValue() == file) {
+				return e.getKey();
+			}
+		}
+		return null;
 	}
 	
 	/**

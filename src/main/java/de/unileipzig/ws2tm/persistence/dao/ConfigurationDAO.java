@@ -15,6 +15,8 @@ import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
 
+import org.apache.log4j.Logger;
+
 import de.unileipzig.ws2tm.Factory;
 import de.unileipzig.ws2tm.persistence.Configuration;
 import de.unileipzig.ws2tm.persistence.DataAccessObject;
@@ -29,6 +31,8 @@ import de.unileipzig.ws2tm.persistence.jaxb.ConfigurationJaxbImpl;
  */
 public class ConfigurationDAO implements DataAccessObject, Factory {
 
+	private static Logger log = Logger.getLogger(ConfigurationDAO.class);
+	
 	private static ConfigurationDAO FACTORY = null;
 	
 	private HashMap<Configuration, File> map = null;
@@ -95,9 +99,8 @@ public class ConfigurationDAO implements DataAccessObject, Factory {
 				if (e.getValue().getName() == key || e.getValue().getCanonicalPath() == key) {
 					this.map.remove(e.getKey());
 				}
-			} catch (IOException e1) {
-				//TODO logging (info)
-				e1.printStackTrace();
+			} catch (IOException ex) {
+				log.error("Could not remove the assigned key from the index of configurations.", ex);
 			}
 		}
 
@@ -149,9 +152,8 @@ public class ConfigurationDAO implements DataAccessObject, Factory {
 				if (e.getValue().getName() == key || e.getValue().getCanonicalPath() == key) {
 					this.save(e.getKey(), e.getValue().getAbsolutePath());
 				}
-			} catch (IOException e1) {
-				//TODO logging (info)
-				e1.printStackTrace();
+			} catch (IOException ex) {
+				log.error("Could not save the configuration assigned by key "+key+".", ex);
 			}
 		}	
 		throw new FileNotFoundException("Assigned file could not be associated with a configuration file. Use #save(Object o, String filePath) instead.");

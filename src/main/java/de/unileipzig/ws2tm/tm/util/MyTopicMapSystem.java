@@ -70,7 +70,7 @@ public class MyTopicMapSystem {
 							if (log.isDebugEnabled()) {
 								log.debug("Returning already existing topic with item identifier "+identifier);
 							}
-							return new TopicE(t,true);
+							return new TopicE((ITopic) t,true);
 						}
 					}
 					if (log.isDebugEnabled()) {
@@ -122,8 +122,8 @@ public class MyTopicMapSystem {
 	 * 
 	 * @see #createRoles()
 	 */
-	public Topic createRole(String id, Topic type, NameE... names) {
-		Topic topic = this.createTopic(id, IDs.SubjectIdentifier).getTopic();
+	public ITopic createRole(String id, Topic type, NameE... names) {
+		ITopic topic = this.createTopic(id, IDs.SubjectIdentifier).getTopic();
 		if (type != null) {
 			topic.addType(type);
 		}

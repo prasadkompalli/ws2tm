@@ -26,7 +26,7 @@ import de.unileipzig.ws2tm.ws.xsd.Type.Sequence;
 
 public class SchemaImpl implements Schema {
 
-	private static Logger log = LogManager.getLogger(Schema.class);
+	private static Logger log = LogManager.getLogger(SchemaImpl.class);
 	
 	private static final String NS_XS = WebService2TopicMapFactory.NS_XSD;
 	
@@ -83,7 +83,7 @@ public class SchemaImpl implements Schema {
 		//TODO Xerces 2.0.2 supports only the following two lines...
 //		dom.getDomConfig().setParameter("create-cdata-nodes", false);
 //		dom.getDomConfig().setParameter("comments", false);
-		
+				
 		this.checkNodeList(dom.getElementsByTagNameNS(NS_XS, "include"));
 		this.checkNodeList(dom.getElementsByTagNameNS(NS_XS, "element"));
 		this.checkNodeList(dom.getElementsByTagNameNS(NS_XS, "complexType"));
@@ -209,7 +209,7 @@ public class SchemaImpl implements Schema {
 			try {
 				max = Integer.parseInt(maxOcc.getNodeValue());
 			} catch (NumberFormatException e) {
-				log.warn("The maximum number of occurrences is set to be \"unbounded\". However, it will be limited to 999 elements to process the information further.");
+				log.info("The maximum number of occurrences is set to be \"unbounded\". However, it will be limited to 999 elements to process the information further.");
 				max = 999;
 			}
 		}
@@ -262,13 +262,13 @@ public class SchemaImpl implements Schema {
 		return q;
 	}
 
-	private QName createQName(String nodeName, String nodeValue) throws IllegalArgumentException {
+	private QName createQName(String nodeName, String nodeValue) {
 		QName q = null;
 		if (!nodeName.startsWith("xmlns")) {
 			if (nodeName.equalsIgnoreCase("targetnamespace")) {
 				q = new QName(nodeValue, "undefined", "tns");
 			} else {
-				throw new IllegalArgumentException("The assigned values need to specify a xml name space: e.g. xmlns=\"http://anUri.com\" or targetNameSpace=\"http://anUri.com\"");
+				log.debug("Found attribute: "+nodeName+"=\""+nodeValue+"\". Will be ignored.");
 			}
 		}
 		if (nodeName.contains(":")) {
@@ -294,9 +294,8 @@ public class SchemaImpl implements Schema {
 		if (list.getLength() == 0) {
 			log.debug("Found node list contains 0 elements.");
 			return;
-		} else  {
-			log.debug("Iterate through found node list with "+list.getLength()+" elements.");
 		}
+		log.debug("Found node list with "+list.getLength()+" elements.");
 		
 		for (int i = 0; i < list.getLength(); i++) {
 			followNode(list.item(i));
@@ -327,6 +326,8 @@ public class SchemaImpl implements Schema {
 			// IGNORE nodes, which do not have a local name specified. These are not important at all and will procude errors for sure
 			return;
 		}
+		
+		log.debug("Checking node: "+name);
 		
 		if (name.equalsIgnoreCase("INCLUDE")) {
 			// INCLUDE ############################## BEGIN

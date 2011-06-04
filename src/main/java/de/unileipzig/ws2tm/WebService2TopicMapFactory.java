@@ -3,64 +3,33 @@
  */
 package de.unileipzig.ws2tm;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
 
 import javax.wsdl.*;
-import javax.wsdl.extensions.*;
-import javax.wsdl.extensions.schema.Schema;
-import javax.wsdl.extensions.soap.*;
-import javax.wsdl.extensions.soap12.SOAP12Address;
 import javax.wsdl.factory.WSDLFactory;
 
-import javax.xml.namespace.QName;
-import javax.xml.soap.Name;
-import javax.xml.soap.SOAPElement;
-import javax.xml.soap.SOAPException;
-import javax.xml.soap.SOAPFault;
-import javax.xml.soap.SOAPMessage;
 
 import org.apache.log4j.Logger;
-import org.tmapi.core.Association;
 import org.tmapi.core.FactoryConfigurationException;
-import org.tmapi.core.Locator;
-import org.tmapi.core.MalformedIRIException;
 import org.tmapi.core.Occurrence;
-import org.tmapi.core.Role;
 import org.tmapi.core.Topic;
 import org.tmapi.core.TopicMap;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 
-import de.topicmapslab.majortom.model.core.ITopic;
 import de.unileipzig.ws2tm.exception.InitializationException;
+import de.unileipzig.ws2tm.tm.TopicMapAccessObject;
 import de.unileipzig.ws2tm.tm.factory.TopicMapEngine;
 import de.unileipzig.ws2tm.util.WebServiceConfigurator;
-import de.unileipzig.ws2tm.util.WebServiceConnector;
 import de.unileipzig.ws2tm.ws.soap.Authentication;
-import de.unileipzig.ws2tm.ws.soap.Connection;
-import de.unileipzig.ws2tm.ws.soap.Message;
 import de.unileipzig.ws2tm.ws.soap.RequestObject;
-import de.unileipzig.ws2tm.ws.soap.factory.SOAPEngine;
 import de.unileipzig.ws2tm.ws.soap.impl.AuthenticationImpl;
 import de.unileipzig.ws2tm.ws.soap.impl.SOAP2TMImpl;
 import de.unileipzig.ws2tm.ws.wsdl.impl.WSDL2TMImpl;
-import de.unileipzig.ws2tm.ws.xsd.SchemaParser;
 
 /**
  * <b>Factory WebService2TopicMap</b> is the main access point to access the
@@ -93,6 +62,8 @@ public class WebService2TopicMapFactory implements Factory {
 	public final static String NS_SOAP = "http://schemas.xmlsoap.org/wsdl/soap/";
 
 	public final static String NS_XSD = "http://www.w3.org/2001/XMLSchema";
+
+	public  final static String NS_XSI = "http://www.w3.org/2001/XMLSchema-instance";
 
 	private List<WebService2TopicMap> instances;
 
@@ -143,8 +114,8 @@ public class WebService2TopicMapFactory implements Factory {
 		}
 
 		@Override
-		public TopicMap newWebService(String wsdlPath) throws IOException, InitializationException {
-			//TODO what happens if the wsdl2tm will be overwritten by calling this function twice with different wsdl paths (web service definitions)
+		public TopicMapAccessObject newWebService(String wsdlPath) throws IOException, InitializationException {
+			//BROKENWINDOW what happens if the wsdl2tm will be overwritten by calling this function twice with different wsdl paths (web service definitions)
 			TopicMap tm = null;
 			try {
 				tm = TopicMapEngine.newInstance().createNewTopicMapInstance(new File(WebServiceConfigurator.getFileWSDL2TM()), NS_WSDL2TM);
@@ -161,17 +132,17 @@ public class WebService2TopicMapFactory implements Factory {
 			} catch (WSDLException e) {
 				throw new IOException("WSDL could not be retrieved from path "+ wsdlPath, e);
 			}
-			return wsdl2tm.load();
+			return wsdl2tm;
 		}
 
 		@Override
-		public TopicMap newWebServiceRequest(RequestObject request) throws IOException, InitializationException {
+		public TopicMapAccessObject newWebServiceRequest(RequestObject request) throws IOException, InitializationException {
 			if (wsdl2tm == null) {
 				throw new InitializationException("The web service needs to be initialized first before requests can be done. Please call function #newWebService(String) first or consult the documentation.");
 			}
 			if (soap2tm == null) {
 				try {
-					soap2tm = new SOAP2TMImpl(this.getConnectionParameter()[0]);
+					soap2tm = new SOAP2TMImpl(this.getConnectionParameter().iterator().next());
 				} catch (FactoryConfigurationException e) {
 					log.fatal("The topic map engine could not be initialized. See error log for more detail.",e);
 				}
@@ -180,14 +151,12 @@ public class WebService2TopicMapFactory implements Factory {
 			this.getConnectionParameter();
 			this.soap2tm.request(request);
 			
-			return this.soap2tm.load();
+			return this.soap2tm;
 		}
 
 		@Override
 		public boolean authenticationRequired() {
-			if (this.auth.securityRequired())
-				return true;
-			return false;
+			return this.auth.securityRequired();
 		}
 
 		@Override
@@ -214,11 +183,11 @@ public class WebService2TopicMapFactory implements Factory {
 		 * @see #addConnectionParameter(Occurrence)
 		 * @see #addConnectionParameter(String)
 		 */
-		private URL[] getConnectionParameter() throws InitializationException {
+		private Collection<URL> getConnectionParameter() throws InitializationException {
 			if (this.connectionParameters == null || this.connectionParameters.size() == 0) {
-				throw new InitializationException("");
+				throw new InitializationException("The connection parameters are not initialized. Therefore they are not usable.");
 			}
-			return (URL[]) this.connectionParameters.toArray();
+			return this.connectionParameters;
 		}
 		
 		/**
@@ -228,11 +197,12 @@ public class WebService2TopicMapFactory implements Factory {
 		 * @throws MalformedURLException if the found url in the occurrence is invalid (invalid sign, invalid protocol)
 		 * @see #addConnectionParameter(String)
 		 */
-		private void addConnectionParameter(Occurrence locationURI) throws MalformedURLException {
+		/*		
+ 		private void addConnectionParameter(Occurrence locationURI) throws MalformedURLException {
 			if (locationURI.getType().getSubjectIdentifiers().contains(wsdl2tm.load().createLocator(NS_WSDL2TM+ "LocationURI"))) { 
 				this.addConnectionParameter(locationURI.getValue());
 			}
-		}
+		}*/
 		
 		/**
 		 * This method tries to add a url depending if the assigned url candidate, can be transformed to a valid url.

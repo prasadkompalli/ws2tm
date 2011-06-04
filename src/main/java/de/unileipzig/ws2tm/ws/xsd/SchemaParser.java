@@ -4,6 +4,7 @@
 package de.unileipzig.ws2tm.ws.xsd;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
@@ -51,6 +52,8 @@ import de.unileipzig.ws2tm.ws.xsd.impl.SchemaImpl;
 public class SchemaParser implements Factory {
 
 	private static SchemaParser FACTORY = null;
+	private static int counter = 0;
+	
 
 	/**
 	 * HashMap for all retrieved schemas. These are required for accessing all temporary saved instances of class {@link Type} and {@link Element}
@@ -58,6 +61,15 @@ public class SchemaParser implements Factory {
 	 * Value of Map: Schema with namespace addressed by the key of the map
 	 */
 	private HashMap<String, Schema> schemas;
+	
+	/**
+	 * Collection of all integrated schemas and their types. The data types (complex and simple) are divided from their schema, and should be used without them
+	 */
+	private HashMap<QName, Type> types;
+	/**
+	 * Collection of all integrated schemas and their elements. The element definitions are divided from their schema, and should be used without them
+	 */
+	private HashMap<QName, Element> elements;	
 	
 	/**
 	 * Logging Instance (Log4j Apache Foundations)
@@ -70,6 +82,10 @@ public class SchemaParser implements Factory {
 	 */
 	private SchemaParser() {
 		
+		types = new HashMap<QName, Type>();
+		elements = new HashMap<QName, Element>();
+		
+		//BROKENWINDOW possible chance that bugs may occur, if this declaration remains. However, I think the links to schema instances should not be cut...
 		schemas = new HashMap<String, Schema>();
 		log.info("Factory class "+SchemaParser.class.getCanonicalName()+" successfully initialzed.");
 	}
@@ -88,14 +104,12 @@ public class SchemaParser implements Factory {
 	 * @throws IOException
 	 */
 	public static Type getType(QName qname) throws IllegalArgumentException, IOException {
-		if (FACTORY == null) {
-			FACTORY = new SchemaParser();
+		SchemaParser.getFactory();
+		if (SchemaParser.getFactory().types.containsKey(qname)) {
+			return SchemaParser.getFactory().types.get(qname);
 		}
-		
-		String ns = qname.getNamespaceURI();
-		
-		FACTORY.addSchema(ns);
-		return FACTORY.getSchema(ns).getType(qname);
+		SchemaParser.getFactory().addSchema(qname.getNamespaceURI());
+		return SchemaParser.getFactory().types.get(qname);
 	}
 	
 	/**
@@ -105,14 +119,12 @@ public class SchemaParser implements Factory {
 	 * @throws IOException
 	 */
 	public static Element getElement(QName qname) throws IllegalArgumentException, IOException {
-		if (FACTORY == null) {
-			FACTORY = new SchemaParser();
+		SchemaParser.getFactory();
+		if (SchemaParser.getFactory().elements.containsKey(qname)) {
+			return SchemaParser.getFactory().elements.get(qname);
 		}
-		
-		String ns = qname.getNamespaceURI();
-		
-		FACTORY.addSchema(ns);
-		return FACTORY.getSchema(ns).getElement(qname);
+		SchemaParser.getFactory().addSchema(qname.getNamespaceURI());
+		return SchemaParser.getFactory().elements.get(qname);		
 	}
 	
 	/**
@@ -197,18 +209,29 @@ public class SchemaParser implements Factory {
 		}
 				
 		try {
-			URL url = new URL(ns);
+			//BROKENWINDOW
+			/*
 			if (ns.startsWith("http://www.w3.org/2001/XMLSchema")) {
-				url = new URL(ns.replaceFirst("/$", "")+".xsd");
+				//url = new URL(ns.replaceFirst("/$", "")+".xsd");
 			}
-			return this.addSchema(url);
+			*/
+			return this.addSchema(new URL(ns));
 		} catch (MalformedURLException e) {
 			throw new IllegalArgumentException("The assigned namespace uri seems to contain illegal signs for a valid URL.",e);
 		}
 	}
 
 	public Schema addSchema(URL url) throws IOException {
+
+		if (schemas.containsKey(url.toString())) {
+			return schemas.get(url.toString());
+		}
+
+		
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		
+		log.warn("This function was called "+counter+++" times.");
+		
 		try {
 			
 			factory.setNamespaceAware(true);
@@ -228,8 +251,23 @@ public class SchemaParser implements Factory {
 	}
 
 	public Schema addSchema(Document dom, String tns) {
-		SchemaImpl s = new SchemaImpl(dom, tns);
-		schemas.put(tns, s);
+		
+		if (schemas.containsKey(tns)) {
+			return schemas.get(tns);
+		}
+		
+		Schema s = new SchemaImpl(dom, tns);
+		
+		for (Element e : s.getElements()) {
+			this.elements.put(e.getQName(), e);
+		}
+		
+		for (Type t: s.getTypes()) {
+			this.types.put(t.getQName(), t);
+		}
+		
+		schemas.put(s.getTargetNameSpace(), s);
+		
 		return s;
 	}
 	
@@ -239,7 +277,7 @@ public class SchemaParser implements Factory {
 	 * @return
 	 */
 	public Schema addSchema(javax.wsdl.extensions.schema.Schema s, String tns) {
-		return this.addSchema((Document) s.getElement().getOwnerDocument(), tns);
+		return this.addSchema(s.getElement().getOwnerDocument(), tns);
 	}
 
 	/**

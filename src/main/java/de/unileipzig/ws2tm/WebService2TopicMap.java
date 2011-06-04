@@ -8,6 +8,7 @@ import java.io.IOException;
 import org.tmapi.core.TopicMap;
 
 import de.unileipzig.ws2tm.exception.InitializationException;
+import de.unileipzig.ws2tm.tm.TopicMapAccessObject;
 import de.unileipzig.ws2tm.ws.soap.Authentication;
 import de.unileipzig.ws2tm.ws.soap.RequestObject;
 
@@ -21,9 +22,9 @@ import de.unileipzig.ws2tm.ws.soap.RequestObject;
  */
 public interface WebService2TopicMap {
 
-	public TopicMap newWebService(String wsdlPath) throws IOException, InitializationException;
+	public TopicMapAccessObject newWebService(String wsdlPath) throws IOException, InitializationException;
 
-	public TopicMap newWebServiceRequest(RequestObject request) throws IOException, InitializationException;
+	public TopicMapAccessObject newWebServiceRequest(RequestObject request) throws IOException, InitializationException;
 	
 	public TopicMap mergeTopicMaps();
 	

@@ -26,13 +26,13 @@ public class Operation {
 	private String nameSpace;
 	
 	private Collection<Parameter> params;
+	private QName datatype;
+	private String value;
 
 	public Operation(String nameSpace, String name , String prefix) {
 		this.setName(name);
 		this.setPrefix(prefix);
-		this.setNameSpace(nameSpace);
-		
-		this.params = new ArrayList<Parameter>();
+		this.setNameSpace(nameSpace);		
 		
 	}
 	
@@ -40,19 +40,19 @@ public class Operation {
 		this(name.getNamespaceURI(),name.getLocalPart(), name.getPrefix());
 	}
 	
-	public void addParameter(String ns, String localName, String prefix, String value) {
-		this.addParameter(new QName(ns, localName, prefix), value);
+	public Parameter addParameter(String ns, String localName, String prefix, String value) {
+		return this.addParameter(new QName(ns, localName, prefix), value);
 	}
 	
-	public void addParameter(String ns, String localName, String value) {
-		this.addParameter(new QName(ns, localName), value);		
+	public Parameter addParameter(String ns, String localName, String value) {
+		return this.addParameter(new QName(ns, localName), value);		
 	}
 	
-	public void addParameter(String name, String value) {
-		this.addParameter(new QName(null, name), value);		
+	public Parameter addParameter(String name, String value) {
+		return this.addParameter(new QName(null, name), value);		
 	}
 	
-	public void addParameter(QName name, String value) {
+	public Parameter addParameter(QName name, String value) {
 		if (name.getNamespaceURI() == null || name.getNamespaceURI().length() == 0) {
 			if (this.getPrefix() != null) {
 				name = new QName(this.getNameSpace(), name.getLocalPart(), this.getPrefix());
@@ -60,12 +60,62 @@ public class Operation {
 				name = new QName(this.getNameSpace(), name.getLocalPart());				
 			}
 		}
-		this.addParameter(new Parameter(name, value));
+		return this.addParameter(new Parameter(name, value));
 	}
 	
-	public void addParameter(Parameter param) {
+	/**
+	 * @param param
+	 * @return
+	 */
+	public Parameter addParameter(Parameter param) {
+		if (this.params == null) {
+			this.params = new ArrayList<Parameter>();			
+		}
 		this.params.add(param);
+		return param;
 	}
+	
+	/**
+	 * @return
+	 */
+	public boolean hasParameters() {
+		if (this.params != null) {
+			return true;
+		}
+		return false;
+	}
+	
+	public boolean hasValue() {
+		if (this.params == null) {
+			return true;
+		}
+		return false;
+	}
+	
+	public String getValue() {
+		return this.value;
+	}
+	
+	public void setValue(String value) {
+		this.value = value;
+	}
+	
+	public boolean hasDatatype() {
+		if (this.datatype != null) {
+			return true;
+		}
+		return false;
+	}
+	
+	public QName getDatatype() {
+		return this.datatype;
+	}
+	
+	public QName setDatatype(QName dt) {
+		this.datatype = dt;
+		return dt;
+	}
+	
 	
 	public Parameter getParameter(int index) {
 		if (this.params.size() <= index || index < 0) {

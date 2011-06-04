@@ -30,7 +30,6 @@ import de.unileipzig.ws2tm.ws.soap.Parameter;
  */
 public class SOAP2TMTest {
 
-	
 	@Test
 	public void requestServer() throws SOAPException, DOMException, IOException, WSDLException {
 		TMQLRequest request = new TMQLRequest();
@@ -41,7 +40,7 @@ public class SOAP2TMTest {
 		WebService2TopicMap ws2tm = WebService2TopicMapFactory.createWebService();
 		TopicMapEngine.OVERWRITE = true;
 		try {
-			TopicMap tm = ws2tm.newWebService("wsdl/weathergov.wsdl");
+			TopicMap tm = ws2tm.newWebService("wsdl/weathergov.wsdl").load();
 			ws2tm.newWebServiceRequest(request);
 		} catch (InitializationException e) {
 			// TODO Auto-generated catch block

@@ -3,21 +3,32 @@
  */
 package de.unileipzig.ws2tm.ws.soap.factory;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Set;
 
+import javax.xml.namespace.QName;
 import javax.xml.soap.MessageFactory;
 import javax.xml.soap.SOAPBodyElement;
+import javax.xml.soap.SOAPElement;
 import javax.xml.soap.SOAPException;
 import javax.xml.soap.SOAPFault;
 import javax.xml.soap.SOAPMessage;
 
+import org.apache.axis.utils.ByteArrayOutputStream;
+import org.apache.log4j.Logger;
+
 
 import de.unileipzig.ws2tm.Factory;
+import de.unileipzig.ws2tm.WebService2TopicMapFactory;
+import de.unileipzig.ws2tm.util.WebServiceConfigurator;
 import de.unileipzig.ws2tm.util.WebServiceConnector;
 import de.unileipzig.ws2tm.ws.soap.Connection;
 import de.unileipzig.ws2tm.ws.soap.Operation;
@@ -32,6 +43,8 @@ import de.unileipzig.ws2tm.ws.soap.Message;
  */
 public class SOAPEngine implements Factory {
 
+	private static Logger log = Logger.getLogger(SOAPEngine.class);
+	
 	private static HashMap<URL,SOAPEngine> INSTANCES;
 	
 	private URL url;
@@ -42,6 +55,8 @@ public class SOAPEngine implements Factory {
 	 * Value: {@link Message} (Request + Response, including possible Errors).
 	 */
 	private HashMap<SOAPMessage,Message> requests = null;
+
+	private Operation currentOperation;
 	
 	private SOAPEngine(URL url) {
 		if (requests == null) {
@@ -67,7 +82,9 @@ public class SOAPEngine implements Factory {
 		if (INSTANCES.containsKey(url)) {
 			return INSTANCES.get(url);
 		}
-		return INSTANCES.put(url, new SOAPEngine(url));
+		SOAPEngine s = new SOAPEngine(url);
+		INSTANCES.put(url, s);
+		return s;
 	}
 	
 	/**
@@ -89,36 +106,93 @@ public class SOAPEngine implements Factory {
 			if (it.hasNext()) {
 				soa = request.getSOAPBody().addBodyElement(op.getQName());				
 			}
-			Parameter par;
-			while (it.hasNext() && soa != null) {
-				par = it.next();
-				
-				if (par.getNameSpace() == null || par.getNameSpace().length() == 0) {
-					par.setNameSpace(op.getNameSpace());
-					if (op.getPrefix() != null) {
-						par.setPrefix(op.getPrefix());
-					}
-				}
-				
-				soa.addChildElement(par.getQName()).addTextNode(par.getValue());
+			
+			this.currentOperation = op;
+			
+			for (Parameter p : op.getParameters()) {
+				this.add(soa,p);						
 			}
 		}
 		
 		if (requests.containsKey(request)) {
 			return requests.get(request);
 		}
+		if (log.isDebugEnabled()) {
+			ByteArrayOutputStream bout = new ByteArrayOutputStream();
+			try {
+				msg.getRequest().writeTo(bout);
+				log.debug(bout.toString());
+			} catch (IOException e) {
+				log.error("Unable to write the created soap message to the log output stream.",e);
+			}
+		}
 		
-		return requests.put(request, msg);
-		
+		requests.put(request, msg);
+		return msg;		
 	}
 	
+	/**
+	 * @param soa
+	 * @param p
+	 * @throws SOAPException 
+	 */
+	private void add(SOAPElement e, Parameter p) throws SOAPException {
+		if (p.getNameSpace() == null || p.getNameSpace().length() == 0) {
+			p.setNameSpace(this.currentOperation.getNameSpace());
+			if (this.currentOperation.getPrefix() != null) {
+				p.setPrefix(this.currentOperation.getPrefix());
+			}
+		}
+		
+		log.debug("Creating new SOAP element of parameter "+p.getQName());
+	
+		SOAPElement newElement = e.addChildElement(p.getQName());
+		if (p.hasValue()) {
+			newElement.addTextNode(p.getValue());					
+		} else {
+			for (Parameter child : p.getParameters()) {
+				this.add(newElement,child);						
+			}
+		}
+		if (p.hasDatatype()) {
+			QName dt = p.getDatatype();
+			String ns, lp = null;
+			if (dt.getNamespaceURI().endsWith("/")) {
+				ns = dt.getNamespaceURI();
+			} else {
+				ns = dt.getNamespaceURI()+"#";
+			}
+			lp = dt.getLocalPart();
+			newElement.addAttribute(new QName(WebService2TopicMapFactory.NS_XSI,"type","xsi"), ns+lp);
+		}
+	}
+
 	public Message createMessage(SOAPMessage request, SOAPMessage response) {
 		MessageImpl msg = new MessageImpl(request, response);
+
 		return this.requests.put(request, msg);
 	}
 	
 	public Message createMessage(SOAPMessage request, Connection conn) throws IOException, SOAPException {
-		return this.createMessage(request, MessageFactory.newInstance().createMessage(conn.getMimeHeaders(), conn.getInputStream()));
+		
+		if (conn == null || conn.getInputStream() == null) {
+			throw new SOAPException("Unable to create a soap message without a valid inputstream. Please check the assigned parameters and their contained values.");
+		}
+		
+		SOAPMessage response = MessageFactory.newInstance().createMessage(conn.getMimeHeaders(), conn.getInputStream());
+		
+		if (response.getSOAPPart().getEnvelope() == null) {
+			SimpleDateFormat df = new SimpleDateFormat( "yyyy-MM-dd_HH.mm.ss.S" );
+			File file = new File(WebServiceConfigurator.getLoggingDirectory()+System.getProperty("file.seperator")+df.format(new Date())+System.getProperty("file.seperator")+response.hashCode()+".txt");
+			file.mkdirs();
+			FileOutputStream out = new FileOutputStream(file);
+			response.writeTo(out);
+			out.close();
+			log.fatal("Could not generate a valid soap message.");
+			throw new SOAPException("Could not generate a valid soap message. The content of the soap message can be found at file: "+file.getCanonicalPath());
+		}
+		
+		return this.createMessage(request, response);
 	}
 	
 	/**

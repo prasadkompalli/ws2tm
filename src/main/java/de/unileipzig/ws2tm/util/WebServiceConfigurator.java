@@ -108,6 +108,18 @@ public class WebServiceConfigurator implements Factory {
 	public static String getProxyUserPassword() {
 		return FACTORY.init().getValue("de.ws2tm.proxy.userpw");
 	}
+
+	/**
+	 * @return 
+	 */
+	public static String getLoggingDirectory() {
+		String dir = FACTORY.init().getValue("de.ws2tm.logging.directory");
+		if (dir == null) {
+			dir = "tmp";
+		}
+		
+		return dir;
+	}
 	
 	
 }

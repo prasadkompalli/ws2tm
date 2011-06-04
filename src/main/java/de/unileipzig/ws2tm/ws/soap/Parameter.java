@@ -3,6 +3,9 @@
  */
 package de.unileipzig.ws2tm.ws.soap;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.xml.namespace.QName;
 
 /**
@@ -19,11 +22,14 @@ import javax.xml.namespace.QName;
  */
 public class Parameter {
 
+	private List<Parameter> children = null;
 	
 	private String name;
 	private String prefix;
 	private String nameSpace;
 	private String value;
+
+	private QName datatype;
 	
 
 	/**
@@ -33,7 +39,7 @@ public class Parameter {
 	public Parameter(QName name, String value) {
 		this(name.getLocalPart(), name.getPrefix(), name.getNamespaceURI(), value);
 	}
-
+	
 	/**
 	 * @param name
 	 * @param prefix
@@ -45,6 +51,93 @@ public class Parameter {
 		this.setPrefix(prefix);
 		this.setNameSpace(nameSpace);
 		this.setValue(value);
+	}
+	
+	/**
+	 * Constructor of class
+	 *
+	 * @param name
+	 * @param prefix
+	 * @param nameSpace
+	 * @param value
+	 * @param datatype
+	 */
+	public Parameter(String name, String prefix, String nameSpace, String value, QName datatype) {
+		this.setName(name);
+		this.setPrefix(prefix);
+		this.setNameSpace(nameSpace);
+		this.setValue(value);
+		this.setDatatype(datatype);
+	}
+	
+	
+	/**
+	 * @return <code>true</code> if child elements exists, which are inserted in this parameter
+	 */
+	public boolean hasParameter() {
+		if (this.children != null) {
+			return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * @return <code>true</code> if no parameters are contained inside this parameter
+	 */
+	public boolean hasValue() {
+		if (this.children == null) {
+			return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * @return <code>true</code> if a datatype was defined
+	 */
+	public boolean hasDatatype() {
+		if (this.datatype != null) {
+			return true;
+		}
+		return false;
+	}
+	
+	public QName setDatatype(QName dt) {
+		this.datatype = dt;
+		return dt;
+	}
+	
+	public QName getDatatype() {
+		return this.datatype;
+	}
+	
+	/**
+	 * @return the possible list of child elements, which are contained in this parameter
+	 */
+	public List<Parameter> getParameters() {
+		return this.children;
+	}
+	
+	/**
+	 * Add a parameter, which acts as a child element of the current parameter.
+	 * 
+	 * @param p
+	 * @return
+	 */
+	public Parameter addParameter(Parameter p) {
+		if (children == null) {
+			children = new ArrayList<Parameter>();
+		}
+		this.children.add(p);
+		return p;
+	}
+	
+	/**
+	 * @param name
+	 * @param value
+	 * @return
+	 */
+	public Parameter addParameter(QName name, String value) {
+		return this.addParameter(new Parameter(name, value));
 	}
 
 	/**

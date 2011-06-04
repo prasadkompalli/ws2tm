@@ -6,10 +6,9 @@
  */
 package de.unileipzig.ws2tm.tm.util;
 
-import org.tmapi.core.Topic;
+import org.apache.log4j.Logger;
 
-import de.unileipzig.ws2tm.WebService2TopicMapFactory;
-import de.unileipzig.ws2tm.WebService2TopicMapFactory.TopicE;
+import de.topicmapslab.majortom.model.core.ITopic;
 
 /**
  * @author Torsten Grigull
@@ -17,12 +16,15 @@ import de.unileipzig.ws2tm.WebService2TopicMapFactory.TopicE;
  *
  */
 public class TopicE {
+	
+	private static Logger log = Logger.getLogger(TopicE.class);
+	
 		private boolean exists;
-		private Topic topic;
+		private ITopic topic;
 
-		public TopicE(Topic topic, boolean exists) {
+		public TopicE(ITopic topic, boolean exists) {
 			if (log.isDebugEnabled()) {
-				log.debug("Created new instance of class "+TopicE.class.getCanonicalName()+": "+WebService2TopicMapFactory.getInfo(topic));
+				log.debug("Created new instance of class "+TopicE.class.getCanonicalName()+": "+MyTopicMapSystem.getInfo(topic));
 			}			
 			this.topic = topic;
 			this.exists = exists;
@@ -32,7 +34,7 @@ public class TopicE {
 			return exists;
 		}
 		
-		public Topic getTopic() {
+		public ITopic getTopic() {
 			return topic;
 		}
 }

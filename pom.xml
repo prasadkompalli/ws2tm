@@ -35,15 +35,19 @@
 		<dependency>
 			<groupId>de.topicmapslab.majortom</groupId>
 			<artifactId>majortom-model</artifactId>
-			<version>1.1.1-SNAPSHOT</version>
+			<version>1.2.0</version>
 		</dependency>
 
 		<dependency>
 			<groupId>de.topicmapslab.majortom</groupId>
 			<artifactId>majortom-inMemory</artifactId>
-			<version>1.1.1-SNAPSHOT</version>
+			<version>1.2.0</version>
 		</dependency>
-
+		<dependency>
+			<groupId>de.topicmapslab</groupId>
+			<artifactId>tmql4j</artifactId>
+			<version>2.6.3</version>
+		</dependency>
 		<dependency>
 			<groupId>de.topicmapslab</groupId>
 			<artifactId>tmclvalidator</artifactId>

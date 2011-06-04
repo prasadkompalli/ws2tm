@@ -4,6 +4,8 @@ import java.io.IOException;
 
 import javax.xml.namespace.QName;
 
+import org.apache.log4j.Logger;
+
 import de.unileipzig.ws2tm.ws.xsd.Type.ListElement;
 
 
@@ -13,6 +15,9 @@ import de.unileipzig.ws2tm.ws.xsd.Type.ListElement;
  */
 //TODO documentation needed for the methods and the class itself
 public class Element implements Comparable<Element>, ListElement {
+	
+	private static Logger log = Logger.getLogger(Element.class);
+	
 	QName name;
 	QName type;
 	
@@ -20,9 +25,9 @@ public class Element implements Comparable<Element>, ListElement {
 	int maxOccurs = 1;
 	
 	public Element() {
-		// TODO Auto-generated constructor stub
+		log.debug("Created new element without any attributes yet.");
 	}
-
+	
 	public Element(QName name, QName type) {
 		this.name = name;
 		try {
@@ -30,11 +35,12 @@ public class Element implements Comparable<Element>, ListElement {
 				this.type = type;
 			}
 		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			log.error(e);
 		} catch (IOException e) {
-			
+			log.error(e);
 		}
+		this.type = type;
+		log.debug("Created Element "+name.toString()+" with datatype "+type.toString());
 	}
 
 	public String getName() {

@@ -18,12 +18,12 @@ public class Restriction {
 	private String pattern = new String();
 	
 	public Restriction() {
-		log.info("Created new Instance of class "+Restriction.class.getCanonicalName());
+		log.debug("Created new Instance of class "+Restriction.class.getCanonicalName());
 	}
 	
 	public Restriction(QName base) {
 		this.base = base;
-		log.info("Created new Instance of class "+Restriction.class.getCanonicalName()+" with base type "+base.toString());
+		log.debug("Created new Instance of class "+Restriction.class.getCanonicalName()+" with base type "+base.toString());
 	}
 	
 	/**

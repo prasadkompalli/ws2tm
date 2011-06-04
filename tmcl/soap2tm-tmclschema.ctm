@@ -1,0 +1,45 @@
+%include http://www.isotopicmaps.org/tmcl/templates.ctm
+%prefix tmcl http://psi.topicmaps.org/tmcl/
+%prefix tm http://psi.topicmaps.org/iso13250/model/
+%prefix xsd http://www.w3.org/2001/XMLSchema
+%prefix wsdl http://schemas.xmlsoap.org/wsdl/
+%prefix soap http://schemas.xmlsoap.org/wsdl/soap/
+%prefix ws2tm http://ws2tm.org/
+%prefix wsdl2tm http://ws2tm.org/wsdl2tm/
+%prefix soap2tm http://ws2tm.org/soap2tm/
+
+soap2tm:request isa tmcl:topic-type;
+	- "SOAP Request";
+	has-subject-locator(1, 1, "http://schemas.xmlsoap.org/wsdl/soap/.+");
+	has-occurrence(xsd:dateTime,1,1);
+	plays-role(soap2tm:request,soap2tm:is-request-response,1,1);
+	is-abstract().
+
+soap2tm:response isa tmcl:topic-type;
+	- "SOAP Response";
+	has-subject-locator(1, 1, "http://schemas.xmlsoap.org/wsdl/soap/.+");
+	has-occurrence(soap2tm:succesful,1,1);
+	has-occurrence(soap2tm:soapfault,0,1);
+	has-occurrence(xsd:dateTime,1,1);
+	plays-role(soap2tm:response,soap2tm:is-request-response,1,1);
+	is-abstract().
+	
+soap2tm:is-using-operation isa tmcl:association-type;
+	- "is using operation";
+	has-role(soap2tm:request,1,1);
+	has-role(wsdl:operation,1,1);
+	role-combination(req,soap2tm:request,op,wsdl:operation).	
+	
+soap2tm:succesful isa tmcl:occurrence-type;
+	- "Succesfulness of a request";
+	has-datatype(xsd:boolean).
+
+soap2tm:soapfault isa tmcl:occurrence-type;
+	- "Integer SOAP Fault Code, defined by W3C";
+	has-datatype(xsd:integer).
+	
+soap2tm:is-request-response isa tmcl:association-type;
+	- "Request Response Relation";
+	has-role(soap2tm:request,1,1);
+	has-role(soap2tm:response,1,1);
+	role-combination(req,soap2tm:request,resp,soap2tm:response).

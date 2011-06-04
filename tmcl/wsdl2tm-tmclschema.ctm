@@ -1,0 +1,38 @@
+%include http://www.isotopicmaps.org/tmcl/templates.ctm
+%prefix tmcl http://psi.topicmaps.org/tmcl/
+%prefix tm http://psi.topicmaps.org/iso13250/model/
+%prefix xsd http://www.w3.org/2001/XMLSchema
+%prefix wsdl http://schemas.xmlsoap.org/wsdl/
+%prefix soap http://schemas.xmlsoap.org/wsdl/soap/
+%prefix ws2tm http://ws2tm.org/
+%prefix wsdl2tm http://ws2tm.org/wsdl2tm/
+%prefix soap2tm http://ws2tm.org/soap2tm/
+
+wsdl:element isa tmcl:topic-type;
+	- "WSDL Definition Element";
+	has-subject-locator(1, 1, "http://schemas.xmlsoap.org/wsdl/.+");
+	is-abstract().
+
+wsdl:service isa wsdl:element;
+	- "WSDL Soap Element";
+	has-name(tm:topic-name, 1, *);
+	has-occurrence(wsdl2tm:locationuri,1,1);
+	has-occurrence(wsdl2tm:transportprotocol,1,1);
+	plays-role(service,has-operation,1,*).
+
+wsdl2tm:is-operation-of-service isa tmcl:association-type;
+	- "Subtype Relation";
+	has-role(operation,1,1);
+	has-role(service,1,1);
+	role-combination(operation, country, container, continent).
+
+	
+wsdl2tm:locationuri isa tmcl:occurrence-type;
+	- "Location of a web service";
+	has-datatype(xsd:anyURI);
+	has-unique-value().
+
+wsdl2tm:transportprotocol isa tmcl:occurrence-type;
+	- "Transport protocol";
+	has-datatype(xsd:anyURI);
+	has-unique-value().

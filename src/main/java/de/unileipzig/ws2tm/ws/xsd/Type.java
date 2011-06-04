@@ -8,6 +8,8 @@ import java.util.Collection;
 
 import javax.xml.namespace.QName;
 
+import org.apache.log4j.Logger;
+
 /**
  * This class abstract type definition which can be complex or simple. However, this aspect
  * is not of interest.
@@ -17,6 +19,8 @@ import javax.xml.namespace.QName;
  *
  */
 public class Type {
+	
+	private static Logger log = Logger.getLogger(Type.class);
 
 	public static final int ELEMENT = 0;
 	public static final int SEQUENCE = 1;
@@ -46,11 +50,12 @@ public class Type {
 	private Type itemType;
 	
 	public Type() {
-		
+		log.debug("Created new datatype.");
 	}
 
 	public Type(QName name) {
 		this.setQName(name);
+		log.debug("Created new datatype "+name.toString());
 	}
 
 	public boolean hasReference() {
@@ -465,6 +470,7 @@ public class Type {
 		 * @param list - the list with the child elements of a {@link Sequence}
 		 * @param minOccurs - the sequence how often it should be used at minimum
 		 * @param maxOccurs - the sequence how often it should be used at maximum
+		 * @return 
 		 */
 		public Sequence addSequence(int minOccurs, int maxOccurs) {
 			return this.addSequence(new Sequence(minOccurs, maxOccurs));
@@ -472,6 +478,7 @@ public class Type {
 		
 		/**
 		 * @param s
+		 * @return 
 		 */
 		public Sequence addSequence(Sequence s) {
 			this.list.add(s);
@@ -494,6 +501,7 @@ public class Type {
 		 * @param list - the list with the child elements of a {@link Choice}
 		 * @param minOccurs - the choice how often it should be used at minimum
 		 * @param maxOccurs - the choice how often it should be used at maximum
+		 * @return 
 		 */
 		public Choice addChoice(int minOccurs, int maxOccurs) {
 			return this.addChoice(new Choice(minOccurs, maxOccurs));
@@ -501,6 +509,7 @@ public class Type {
 		
 		/**
 		 * @param c
+		 * @return 
 		 */
 		public Choice addChoice(Choice c) {
 			this.list.add(c);

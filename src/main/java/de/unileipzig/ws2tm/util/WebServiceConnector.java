@@ -205,7 +205,7 @@ public class WebServiceConnector implements Factory {
 		String requestText = this.createConnectionText(msg);
 		
 		if (log.isDebugEnabled()) {
-			log.debug("Sending the following request to url "+url.toString()+"\n"+requestText);
+			log.debug("Created the request text for web service at "+url.toString());
 		}
 		
 		HttpURLConnection conn = null;
@@ -265,7 +265,10 @@ public class WebServiceConnector implements Factory {
 				MimeHeaders headers = new MimeHeaders();
 				for (Map.Entry<String, List<String>> e : conn.getHeaderFields().entrySet()) {
 					for (String v : e.getValue()) {
-						headers.addHeader(e.getKey(), v);
+						if (v.length()==1) {
+							System.out.println(e.getKey() +" : "+ v);
+							headers.addHeader(e.getKey(), v);
+						}
 					}
 				}
 				

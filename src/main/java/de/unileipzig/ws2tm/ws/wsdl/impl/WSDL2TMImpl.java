@@ -47,9 +47,8 @@ import org.tmapi.core.Occurrence;
 import org.tmapi.core.Role;
 import org.tmapi.core.Topic;
 import org.tmapi.core.TopicMap;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
 
+import de.topicmapslab.majortom.model.core.ITopic;
 import de.unileipzig.ws2tm.WebService2TopicMapFactory;
 import de.unileipzig.ws2tm.exception.InitializationException;
 import de.unileipzig.ws2tm.tm.TopicMapAccessObject;
@@ -58,10 +57,9 @@ import de.unileipzig.ws2tm.tm.util.MyTopicMapSystem;
 import de.unileipzig.ws2tm.tm.util.NameE;
 import de.unileipzig.ws2tm.tm.util.TopicE;
 import de.unileipzig.ws2tm.tm.util.MyTopicMapSystem.IDs;
-import de.unileipzig.ws2tm.ws.soap.Authentication;
 import de.unileipzig.ws2tm.ws.soap.Message;
-import de.unileipzig.ws2tm.ws.soap.RequestObject;
 import de.unileipzig.ws2tm.ws.xsd.SchemaParser;
+import de.unileipzig.ws2tm.ws.xsd.Type;
 
 public class WSDL2TMImpl implements TopicMapAccessObject {
 	
@@ -69,16 +67,16 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 	
 	private MyTopicMapSystem tms;
 	private String tns;
-	private Topic deutsch;
-	private Topic english;
+	private ITopic deutsch;
+	private ITopic english;
 	
 	private HashMap<String, URL> namespaces;
 	
-	private HashMap<WSDLAssociation, Topic> ascs;
-	private HashMap<WSDLTopic, Topic> topicTypes;
-	private HashMap<WSDLRoles, Topic> topicRoles;
+	private HashMap<WSDLAssociation, ITopic> ascs;
+	private HashMap<WSDLTopic, ITopic> topicTypes;
+	private HashMap<WSDLRoles, ITopic> topicRoles;
 	private String notdefined = "Not defined";
-	private Topic dataType;
+	private ITopic dataType;
 	
 	private WSDL2TMImpl(Definition wsdl) throws InitializationException,MalformedIRIException, FactoryConfigurationException,IllegalArgumentException, IOException {
 		this(wsdl, WebService2TopicMapFactory.NS_WSDL2TM+ new Random().nextLong());
@@ -102,7 +100,7 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 		}
 		log.info("Using web service description "+wsdl.getDocumentBaseURI());
 		
-		Topic language = tms.createTopic("http://code.topicmapslab.de/grigull-tm2speech/Language/", IDs.ItemIdentifier).getTopic();
+		ITopic language = tms.createTopic("http://code.topicmapslab.de/grigull-tm2speech/Language/", IDs.ItemIdentifier).getTopic();
 		deutsch = tms.createTopic("http://code.topicmapslab.de/grigull-tm2speech/Language/deutsch", IDs.ItemIdentifier).getTopic();
 		deutsch.createName("deutsch");
 		deutsch.addType(language);
@@ -128,7 +126,7 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 		}
 		
 		this.namespaces = new HashMap<String, URL>();
-		Map<String,String> map = (Map<String,String>) wsdl.getNamespaces();
+		Map<String,String> map = wsdl.getNamespaces();
 		for (Map.Entry<String, String> e : map.entrySet()) {
 			if (e.getKey().startsWith("urn:") || e.getKey().startsWith("URN:")) {
 				//BROKENWINDOW namespaces without an unprefixed element type name ("urn") are probably not recognized, and will cause a lot of ugly errors
@@ -141,14 +139,9 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 		while (it.hasNext()) {
 			ExtensibilityElement e = it.next();
 			QName name = e.getElementType();
+			// if you find schemas inside the web service description...
 			if (name.getNamespaceURI().equalsIgnoreCase("http://www.w3.org/2001/XMLSchema") && name.getLocalPart().equalsIgnoreCase("schema")) {
 				Schema s = (Schema) e;
-				Element ele = s.getElement();
-				System.out.println("WSDL TargetnameSpace "+tns);
-				int i=1;
-				for (Node node = ele.getAttributes().item(0); node != null; node = ele.getAttributes().item(i++)) {
-					System.out.println("S-Element Attribute ("+ele.getTagName()+") "+node.getNodeName()+": "+node.getNodeValue());
-				}
 				SchemaParser.getFactory().addSchema(s, s.getElement().getNamespaceURI());
 			}
 		}
@@ -206,8 +199,8 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 	 * </ul>
 	 * </p>
 	 */
-	private HashMap<WSDLAssociation, Topic> createAssociations() {
-		HashMap<WSDLAssociation, Topic> ascs = new HashMap<WSDLAssociation, Topic>();
+	private HashMap<WSDLAssociation, ITopic> createAssociations() {
+		HashMap<WSDLAssociation, ITopic> ascs = new HashMap<WSDLAssociation, ITopic>();
 		ascs.put(WSDLAssociation.relation_service_port, 
 				this.createAssociation(tms.getTopicMap().createLocator(WebService2TopicMapFactory.NS_WSDL2TM+WSDLAssociation.relation_service_port.name()),
 						new NameE("Relation Service Port"),
@@ -301,8 +294,8 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 	 * the scopes where the name should be used (which are topics).
 	 * @return the created association as instance of class {@link Topic}
 	 */
-	private Topic createAssociation(Locator locator, NameE... names) {
-		Topic ascType = tms.createTopic(locator, IDs.SubjectIdentifier).getTopic();
+	private ITopic createAssociation(Locator locator, NameE... names) {
+		ITopic ascType = tms.createTopic(locator, IDs.SubjectIdentifier).getTopic();
 		ascType.addType(tms.createTopic(WebService2TopicMapFactory.NS_WSDL2TM+ "sub_category_association_type", IDs.ItemIdentifier).getTopic());
 		ascType.getTypes().iterator().next().addType(tms.createTopic("http://psi.topicmaps.org/tmcl/topic-type",IDs.ItemIdentifier).getTopic());
 		for (NameE name : names) {
@@ -317,53 +310,53 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 	 * 
 	 * @return a map where the keys point to {@link WSDLTopic}, and the value is the topic type linked to the key
 	 */
-	private HashMap<WSDLTopic, Topic> createTopicTypes() {
-		HashMap<WSDLTopic, Topic> topics = new HashMap<WSDLTopic, Topic>();
-		Topic topicType = tms.createTopic("http://psi.topicmaps.org/tmcl/topic-type", IDs.ItemIdentifier).getTopic();
+	private HashMap<WSDLTopic, ITopic> createTopicTypes() {
+		HashMap<WSDLTopic, ITopic> topics = new HashMap<WSDLTopic, ITopic>();
+		ITopic topicType = tms.createTopic("http://psi.topicmaps.org/tmcl/topic-type", IDs.ItemIdentifier).getTopic();
 		
-		Topic service = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Service", IDs.SubjectIdentifier).getTopic();
+		ITopic service = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Service", IDs.SubjectIdentifier).getTopic();
 		service.addType(topicType);
 		service.createName("Topic type service");
-		Topic port = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Port", IDs.SubjectIdentifier).getTopic();
+		ITopic port = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Port", IDs.SubjectIdentifier).getTopic();
 		port.addType(topicType);
 		service.createName("Topic type service port");
-		Topic binding = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Binding", IDs.SubjectIdentifier).getTopic();
+		ITopic binding = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Binding", IDs.SubjectIdentifier).getTopic();
 		binding.addType(topicType);
 		service.createName("Topic type binding");
-		Topic bindingop = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"BindingOperation", IDs.SubjectIdentifier).getTopic();
+		ITopic bindingop = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"BindingOperation", IDs.SubjectIdentifier).getTopic();
 		bindingop.addType(topicType);
 		service.createName("Topic type binding operation");
-		Topic porttype = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"PortType", IDs.SubjectIdentifier).getTopic();
+		ITopic porttype = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"PortType", IDs.SubjectIdentifier).getTopic();
 		porttype.addType(topicType);
 		service.createName("Topic type porttype");
-		Topic operation = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Operation", IDs.SubjectIdentifier).getTopic();
+		ITopic operation = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Operation", IDs.SubjectIdentifier).getTopic();
 		operation.addType(topicType);
 		service.createName("Topic type operation");
-		Topic bindinginput = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"BindingInput", IDs.SubjectIdentifier).getTopic();
+		ITopic bindinginput = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"BindingInput", IDs.SubjectIdentifier).getTopic();
 		bindinginput.addType(topicType);
 		service.createName("Topic type binding input");
-		Topic bindingoutput = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"BindingOutput", IDs.SubjectIdentifier).getTopic();
+		ITopic bindingoutput = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"BindingOutput", IDs.SubjectIdentifier).getTopic();
 		bindingoutput.addType(topicType);
 		service.createName("Topic type binding output");
-		Topic bindingfault = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"BindingFault", IDs.SubjectIdentifier).getTopic();
+		ITopic bindingfault = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"BindingFault", IDs.SubjectIdentifier).getTopic();
 		bindingfault.addType(topicType);
 		service.createName("Topic type binding fault");
-		Topic input = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Input", IDs.SubjectIdentifier).getTopic();
+		ITopic input = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Input", IDs.SubjectIdentifier).getTopic();
 		input.addType(topicType);
 		service.createName("Topic type operation input");
-		Topic output = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Output", IDs.SubjectIdentifier).getTopic();
+		ITopic output = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Output", IDs.SubjectIdentifier).getTopic();
 		output.addType(topicType);
 		service.createName("Topic type operation output");
-		Topic fault = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Fault", IDs.SubjectIdentifier).getTopic();
+		ITopic fault = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Fault", IDs.SubjectIdentifier).getTopic();
 		fault.addType(topicType);
 		service.createName("Topic type operation fault");
-		Topic message = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Message", IDs.SubjectIdentifier).getTopic();
+		ITopic message = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Message", IDs.SubjectIdentifier).getTopic();
 		message.addType(topicType);
 		service.createName("Topic type message");
-		Topic part = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Part", IDs.SubjectIdentifier).getTopic();
+		ITopic part = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Part", IDs.SubjectIdentifier).getTopic();
 		part.addType(topicType);
 		service.createName("Topic type part");
-		Topic types = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Types", IDs.SubjectIdentifier).getTopic();
+		ITopic types = tms.createTopic(WebService2TopicMapFactory.NS_WSDL+"Types", IDs.SubjectIdentifier).getTopic();
 		types.addType(topicType);	
 		service.createName("Topic type types");
 		
@@ -376,7 +369,7 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 		topics.put(WSDLTopic.bindingop_input, bindinginput);
 		topics.put(WSDLTopic.bindingop_output, bindingoutput);
 		topics.put(WSDLTopic.bindingop_fault, bindingfault);
-			topics.put(WSDLTopic.operation_input, input);
+		topics.put(WSDLTopic.operation_input, input);
 		topics.put(WSDLTopic.operation_output, output);
 		topics.put(WSDLTopic.operation_fault, fault);
 		topics.put(WSDLTopic.message, message);
@@ -394,8 +387,8 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 	 * @return a map with the keys of class {@link WSDLRoles}, and the role types, defined
 	 * in this method
 	 */
-	private HashMap<WSDLRoles, Topic> createRoles() {
-		HashMap<WSDLRoles, Topic> roles = new HashMap<WSDLRoles, Topic>();
+	private HashMap<WSDLRoles, ITopic> createRoles() {
+		HashMap<WSDLRoles, ITopic> roles = new HashMap<WSDLRoles, ITopic>();
 		Topic roleType = tms.createTopic("http://psi.topicmaps.org/tmcl/role-type", IDs.ItemIdentifier).getTopic();
 		
 		roles.put(WSDLRoles.service, tms.createRole(WebService2TopicMapFactory.NS_WSDL2TM+"Service-Role", roleType, 
@@ -548,7 +541,7 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 		}
 		
 		// First: get every service
-		Topic service = serviceE.getTopic();
+		ITopic service = serviceE.getTopic();
 		service.addType(topicTypes.get(WSDLTopic.service));
 		
 		// Second: Iterate through all found ports of a service element
@@ -575,7 +568,7 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 			while (it_op.hasNext()) {
 				Operation op = it_op.next();
 				// those operations will be associated with the current service through a pre-defined connection
-				Topic opT = this.associateTopics(s, op,
+				ITopic opT = this.associateTopics(s, op,
 						topicTypes.get(WSDLTopic.service), 
 						topicTypes.get(WSDLTopic.operation),
 						topicRoles.get(WSDLRoles.service),
@@ -620,8 +613,8 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 	 * @see #associateTopics(Object, Object, Topic, Topic, Topic, Topic, WSDLAssociation)
 	 */
 	@SuppressWarnings("unchecked")
-	private Topic associateTopics(Operation op, javax.wsdl.Message msg, Topic type, Iterator<ExtensibilityElement> it) {
-		Topic m = this.associateTopics(op, msg, 
+	private Topic associateTopics(Operation op, javax.wsdl.Message msg, ITopic type, Iterator<ExtensibilityElement> it) {
+		ITopic m = this.associateTopics(op, msg, 
 				topicTypes.get(WSDLTopic.operation), 
 				topicTypes.get(WSDLTopic.message), 
 				topicRoles.get(WSDLRoles.operation), 
@@ -634,6 +627,9 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 		while (it_part.hasNext()) {
 			Part part = it_part.next();
 			QName qname = new QName(tns, part.getName());
+			QName Qele = null, Qtyp = null;
+			String ele = null;
+			Type xsType = null;
 			if (part.getTypeName() != null) {
 				//TODO add here the xsd schema topic transformation
 				/*
@@ -641,36 +637,100 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 				 * if Type: part.getName();
 				 */
 				// complex or simple type of xsd -> Occurrence
-				 qname = part.getTypeName();
+				ele = part.getName();
+				Qele = new QName(tns,ele);
+				Qtyp = part.getTypeName();
+				try {
+					xsType = SchemaParser.getType(Qtyp);
+				} catch (IllegalArgumentException e) {
+					log.warn("While accessing instance of type "+Qtyp+" with part name "+ele+" an IllegalArgumentException was catched.",e);
+				} catch (IOException e) {
+					log.warn("While accessing instance of type "+Qtyp+" with part name "+ele+" an IOException was catched.",e);
+				}
 			} else {
 				// element name of xsd -> Association to next Element (macht wenig Sinn, denn ComplexType kann ArrayOfFloat sein
 				/*
 				 * SchemaParser.getElement(part.getElementName())
 				 * if Element: element.getQName();, element.getType();
 				 */
-				qname = part.getElementName();
+				Qele = part.getElementName();
+				ele = Qele.getLocalPart();
+				try {
+					xsType = SchemaParser.getElement(Qele).getType();
+					Qtyp = xsType.getQName();
+				} catch (IllegalArgumentException e) {
+					log.warn("While accessing instance of type of element "+Qele.toString()+" an IllegalArgumentException was catched.",e);
+				} catch (IOException e) {
+					log.warn("While accessing instance of type of element "+Qele.toString()+" an IOException was catched.",e);
+				}
 			}
+			
 			
 			TopicMap tm = tms.getTopicMap();
 			Association asc = tm.createAssociation(ascs.get(WSDLAssociation.relation_message_part));
 			
-			Topic para = tms.createTopic((String) null, IDs.ItemIdentifier).getTopic();
+			ITopic para = tms.createTopic(Qele, IDs.SubjectIdentifier).getTopic();
+			para.createName(ele);
+			para.addType(this.topicTypes.get(WSDLTopic.part));
 			
-			Topic name = tms.createTopic(WebService2TopicMapFactory.NS_WSDL2TM+"ws/datatype/name", IDs.SubjectIdentifier).getTopic();
-			Topic value = tms.createTopic(WebService2TopicMapFactory.NS_WSDL2TM+"ws/datatype/value", IDs.SubjectIdentifier).getTopic();
-			para.createOccurrence(name,qname.getLocalPart());
-			para.createOccurrence(value,notdefined);
-			para.createName(qname.getLocalPart());
+			Topic tdt = tms.createTopic(WebService2TopicMapFactory.NS_WSDL2TM+"ws/datatype", IDs.SubjectIdentifier).getTopic();
 			
+			log.debug("Adding element name "+ele);
+			
+			if (xsType != null) {
+				ITopic Ttyp = this.transformXSTyp2Topic(xsType);
+				para.createOccurrence(tdt,ele, Ttyp);
+			} else {
+				para.createOccurrence(tdt,ele);				
+			}
 			asc.createRole(topicRoles.get(WSDLRoles.message), m);
-			asc.createRole(dataType, para);
-			
+			asc.createRole(topicRoles.get(WSDLRoles.part), para);			
 		}
 		
 		return m;
 	}
 
-	@SuppressWarnings("unchecked")
+	/**
+	 * @param qtyp
+	 * @return
+	 */
+	private ITopic transformXSTyp2Topic(Type type) {
+		ITopic t = tms.createTopic((String) null, IDs.ItemIdentifier).getTopic();
+		t.addSupertype(dataType);
+		t.addType(tms.createTopic(type.getQName(), IDs.ItemIdentifier).getTopic());
+		
+		
+		ITopic aSetting = tms.createTopic(WebService2TopicMapFactory.NS_WSDL2TM+"tm/asc/datatype/has-setting", IDs.SubjectIdentifier).getTopic();
+		ITopic Tsetting = tms.createTopic(WebService2TopicMapFactory.NS_WSDL2TM+"ws/datatype/setting", IDs.SubjectIdentifier).getTopic();
+		ITopic setting = tms.createTopic((String) null, IDs.ItemIdentifier).getTopic();		
+		setting.addType(Tsetting);
+		
+		//TODO the created topic about a concret topic type needs to be analyzed and transformed further to a topic structure. 
+		/*
+		ITopic tboolean = tms.createTopic(new QName(WebService2TopicMapFactory.NS_XSD,"boolean"), IDs.SubjectIdentifier).getTopic();
+		
+		
+		Association a = tms.getTopicMap().createAssociation(aSetting);
+		a.createRole(dataType, t);
+		a.createRole(Tsetting, setting);
+		
+		if (type.hasChildren()) {
+			for (ListElement e : type.getListElements()) {
+				switch (e.getListElementType()) {
+				case Type.ALL:
+				case Type.CHOICE:
+				case Type.SEQUENCE:
+				case Type.ELEMENT: 
+				}
+			}
+		}
+		
+		*/
+		
+		return t;
+		
+	}
+
 	private void associateTopics(Object a) {
 		if (Service.class.isInstance(a)) {
 			Iterator<Port> it = ((Service) a).getPorts().values().iterator();
@@ -844,13 +904,12 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 	 * 
 	 */
 	@SuppressWarnings("unchecked")
-	private Topic associateTopics(Object a, Object b, Topic typea, Topic typeb, Topic ra, Topic rb, WSDLAssociation choose) {
-		
+	private ITopic associateTopics(Object a, Object b, ITopic typea, ITopic typeb, ITopic ra, ITopic rb, WSDLAssociation choose) {
 		
 		TopicE t;
-		Topic temp = null;
-		Topic ta = null;
-		Topic tb = null;
+		ITopic temp = null;
+		ITopic ta = null;
+		ITopic tb = null;
 		
 		Object[] objs = new Object[]{a,b};
 		int i = 0;
@@ -985,7 +1044,7 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 
 	}
 
-	private Association createAssociation(Topic ascType, Topic topic_a, Topic role_a, Topic topic_b, Topic role_b) {
+	private Association createAssociation(ITopic ascType, ITopic topic_a, ITopic role_a, ITopic topic_b, ITopic role_b) {
 		
 		for (Association asc : this.getAssociations()) {
 			if (asc.getRoleTypes().contains(role_a) && asc.getRoleTypes().contains(role_b)) {
@@ -1028,7 +1087,7 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 		return asc;
 	}
 
-	private void addOccurrences(Topic topic, Iterator<ExtensibilityElement> it) {
+	private void addOccurrences(ITopic topic, Iterator<ExtensibilityElement> it) {
 		String ns, lp;
 		String NS_SOAP = "http://schemas.xmlsoap.org/wsdl/soap/";
 		String NS_SOAP12 = "http://schemas.xmlsoap.org/wsdl/soap12/";
@@ -1061,8 +1120,9 @@ public class WSDL2TMImpl implements TopicMapAccessObject {
 					// Use
 					Iterator<String> encodings = soa.getEncodingStyles().iterator();
 					while (encodings.hasNext()) {
+						
 						//BROKENWINDOW test this
-						System.out.println(encodings.next());
+						System.out.println(soa.getElementType() + ": "+ encodings.next());
 					}
 					if (soa.getUse() != null) {
 						Occurrence occ = topic.createOccurrence(tms.createTopic(WebService2TopicMapFactory.NS_WSDL2TM+"Usage", IDs.SubjectIdentifier).getTopic(),soa.getUse());
